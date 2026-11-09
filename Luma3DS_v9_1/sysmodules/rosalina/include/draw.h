@@ -77,6 +77,7 @@ void Draw_Unlock(void);
 void Draw_DrawCharacter(u32 posX, u32 posY, u32 color, char character);
 u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string);
 u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...);
+u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *romaji, const char *english);
 
 void Draw_FillFramebuffer(u32 value);
 void Draw_ClearFramebuffer(void);

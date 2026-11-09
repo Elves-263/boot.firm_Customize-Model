@@ -27,6 +27,7 @@
 #include <3ds.h>
 #include <3ds/os.h>
 #include "menus.h"
+#include "menus/lang.h"
 #include "menu.h"
 #include "draw.h"
 #include "menus/process_list.h"
@@ -35,6 +36,10 @@
 #include "menus/debugger.h"
 #include "menus/miscellaneous.h"
 #include "menus/sysconfig.h"
+#include "menus/battery.h"
+#include "menus/memdump.h"
+#include "menus/ftpd.h"
+#include "menus/text_input.h"
 #include "plgloader.h"
 #include "ifile.h"
 #include "memory.h"
@@ -42,7 +47,7 @@
 
 Menu rosalinaMenu = {
     "Rosalina menu",
-    .nbItems = 18,
+    .nbItems = 22,
     {
         { "New 3DS menu...", MENU, .menu = &N3DSMenu },
         { "Cheats...", METHOD, .method = &RosalinaMenu_Cheats },
@@ -53,6 +58,7 @@ Menu rosalinaMenu = {
         { "System configuration...", MENU, .menu = &sysconfigMenu },
         { "Miscellaneous options...", MENU, .menu = &miscellaneousMenu },
         { "Colors...", METHOD, .method = &RosalinaMenu_AccentColor },
+        { "Language / Gengo", METHOD, .method = &RosalinaMenu_Language },
         { "3gx / txt checker", METHOD, .method = &RosalinaMenu_3gxTxtChecker },
         { "Self test", METHOD, .method = &RosalinaMenu_SelfTest },
         { "Restore settings", METHOD, .method = &RosalinaMenu_RestoreSettings },
@@ -61,6 +67,9 @@ Menu rosalinaMenu = {
         { "Switch version (v9.1/v13.4)", METHOD, .method = &RosalinaMenu_ChainloadVersionToggle },
         { "Power off", METHOD, .method = &RosalinaMenu_PowerOff },
         { "Reboot", METHOD, .method = &RosalinaMenu_Reboot },
+        { "Battery info", METHOD, .method = &RosalinaMenu_BatteryInfo },
+        { "Memory dump", METHOD, .method = &RosalinaMenu_MemoryDump },
+        { "FTP server", METHOD, .method = &RosalinaMenu_Ftpd },
         { "Credits", METHOD, .method = &RosalinaMenu_ShowCredits },
     }
 };
@@ -209,10 +218,10 @@ void RosalinaMenu_ChainloadVersionToggle(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Version switch chainload");
-        Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Current v%s   ->   v%s",
+        Draw_DrawString(10, 10, COLOR_TITLE, Lang(STR_VERSION_SWITCH_CHAINLOAD));
+        Draw_DrawFormattedString(10, 30, COLOR_WHITE, Lang(STR_CURRENT_V_V),
             MY_LUMA_VERSION, target);
-        Draw_DrawString(10, 30 + SPACING_Y, COLOR_WHITE, "A: launch   B: go back");
+        Draw_DrawString(10, 30 + SPACING_Y, COLOR_WHITE, Lang(STR_A_LAUNCH_B_GO_BACK));
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
@@ -222,7 +231,7 @@ void RosalinaMenu_ChainloadVersionToggle(void)
         {
             if(!chainloadVersionFirmExists(target))
             {
-                LogLine("version switch: target boot.firm missing");
+                LogLine("[バージョン切り替え: 切り替え先の boot.firm が見つかりません] / [version switch: target boot.firm missing]");
                 Draw_Lock();
                 Draw_ClearFramebuffer();
                 Draw_FlushFramebuffer();
@@ -231,9 +240,10 @@ void RosalinaMenu_ChainloadVersionToggle(void)
                 do
                 {
                     Draw_Lock();
-                    Draw_DrawString(10, 10, COLOR_TITLE, "Version switch chainload");
-                    Draw_DrawFormattedString(10, 30, COLOR_RED, "boot.firm for v%s was not found.", target);
-                    Draw_DrawString(10, 30 + 2 * SPACING_Y, COLOR_WHITE, "B: go back");
+                    Draw_DrawString(10, 10, COLOR_TITLE, Lang(STR_VERSION_SWITCH_CHAINLOAD));
+                    Draw_DrawFormattedString(10, 30, COLOR_RED, "[v%s no boot.firm ga mitsukarimasen]", target);
+                    Draw_DrawFormattedString(10, 30 + SPACING_Y, COLOR_RED, "[boot.firm for v%s was not found]", target);
+                    Draw_DrawString(10, 30 + 3 * SPACING_Y, COLOR_WHITE, "B: modoru / go back");
                     Draw_FlushFramebuffer();
                     Draw_Unlock();
                 }
@@ -245,7 +255,7 @@ void RosalinaMenu_ChainloadVersionToggle(void)
             
             if(!chainloadVersionFlagSet(target))
             {
-                LogLine("version switch: SD write failed");
+                LogLine("[バージョン切り替え: SD への書き込みに失敗しました] / [version switch: SD write failed]");
                 Draw_Lock();
                 Draw_ClearFramebuffer();
                 Draw_FlushFramebuffer();
@@ -254,9 +264,10 @@ void RosalinaMenu_ChainloadVersionToggle(void)
                 do
                 {
                     Draw_Lock();
-                    Draw_DrawString(10, 10, COLOR_TITLE, "Version switch chainload");
-                    Draw_DrawString(10, 30, COLOR_RED, "Failed to write to the SD card.");
-                    Draw_DrawString(10, 30 + 2 * SPACING_Y, COLOR_WHITE, "B: go back");
+                    Draw_DrawString(10, 10, COLOR_TITLE, Lang(STR_VERSION_SWITCH_CHAINLOAD));
+                    Draw_DrawBilingual(10, 30, COLOR_RED, "SD kaado eno kakikomi ni shippai shimashita",
+                                       "Failed to write to the SD card");
+                    Draw_DrawString(10, 30 + 3 * SPACING_Y, COLOR_WHITE, "B: modoru / go back");
                     Draw_FlushFramebuffer();
                     Draw_Unlock();
                 }
@@ -912,7 +923,7 @@ void RosalinaMenu_3gxTxtChecker(void)
         else
         {
             Checker_WriteReport(tid, hasPlugin, hasCheats);
-            LogLine("checker: missing 3gx or cheats txt");
+            LogLine("[チェッカー: 3gx またはチートファイルが不足しています] / [checker: missing 3gx or cheats txt]");
         }
     }
 
@@ -926,8 +937,8 @@ void RosalinaMenu_3gxTxtChecker(void)
 
         if (tid == 0)
         {
-            Draw_DrawString(10, 40, COLOR_RED, "No game is running.");
-            Draw_DrawString(10, 40 + SPACING_Y, COLOR_WHITE, "Open a game first, then run this.");
+            Draw_DrawString(10, 40, COLOR_RED, Lang(STR_NO_GAME_IS_RUNNING));
+            Draw_DrawString(10, 40 + SPACING_Y, COLOR_WHITE, Lang(STR_OPEN_A_GAME_FIRST_THEN_RUN_THIS));
         }
         else
         {
@@ -962,7 +973,7 @@ void RosalinaMenu_3gxTxtChecker(void)
             y += 6;
 
             if (hasPlugin && hasCheats)
-                Draw_DrawString(10, y, COLOR_LIME, "All present. Report removed.");
+                Draw_DrawString(10, y, COLOR_LIME, Lang(STR_ALL_PRESENT_REPORT_REMOVED));
             else
                 Draw_DrawFormattedString(10, y, COLOR_YELLOW, "Wrote /luma/%016llX.txt", tid);
         }
@@ -1097,17 +1108,18 @@ void SDSpaceWarnIfLow(void)
     if (freeBytes == (u64)-1 || freeBytes >= 100ULL * 1024 * 1024)
         return;
 
-    LogLine("warning: low SD space");
+    LogLine("[警告: SD カードの空き容量が不足しています] / [warning: low SD space]");
 
     menuEnter();
     do
     {
         Draw_Lock();
         Draw_ClearFramebuffer();
-        Draw_DrawString(10, 10, COLOR_RED, "Low SD space");
-        Draw_DrawFormattedString(10, 40, COLOR_WHITE, "Free: %u MB", (unsigned)(freeBytes >> 20));
-        Draw_DrawString(10, 40 + SPACING_Y, COLOR_WHITE, "Consider freeing some space.");
-        Draw_DrawString(10, 40 + 3 * SPACING_Y, COLOR_WHITE, "B: continue");
+        Draw_DrawString(10, 10, COLOR_RED, "SD kuuki busoku / Low SD space");
+        Draw_DrawFormattedString(10, 40, COLOR_WHITE, Lang(STR_FREE_MB), (unsigned)(freeBytes >> 20));
+        Draw_DrawBilingual(10, 40 + SPACING_Y, COLOR_WHITE, "Kuuki wo fuyashite kudasai",
+                           "Consider freeing some space");
+        Draw_DrawString(10, 40 + 4 * SPACING_Y, COLOR_WHITE, "B: tsuzukeru / continue");
         Draw_FlushFramebuffer();
         Draw_Unlock();
     }
@@ -1144,9 +1156,9 @@ void RosalinaMenu_SelfTest(void)
         }
         y += 4;
         if (freeBytes == (u64)-1)
-            Draw_DrawString(10, y, COLOR_WHITE, "SD free: N/A");
+            Draw_DrawString(10, y, COLOR_WHITE, Lang(STR_SD_FREE_N_A));
         else
-            Draw_DrawFormattedString(10, y, COLOR_WHITE, "SD free: %u MB", (unsigned)(freeBytes >> 20));
+            Draw_DrawFormattedString(10, y, COLOR_WHITE, Lang(STR_SD_FREE_MB), (unsigned)(freeBytes >> 20));
 
         Draw_DrawString(10, 220, COLOR_WHITE, "B: back");
         Draw_FlushFramebuffer();
@@ -1167,18 +1179,18 @@ void RosalinaMenu_RestoreSettings(void)
         Draw_Lock();
         Draw_ClearFramebuffer();
         Draw_DrawString(10, 10, COLOR_TITLE, "Restore settings");
-        Draw_DrawString(10, 34, COLOR_WHITE, "Restore a saved colour backup:");
+        Draw_DrawString(10, 34, COLOR_WHITE, Lang(STR_RESTORE_A_SAVED_COLOUR_BACKUP));
 
         for (s32 i = 0; i < 3; ++i)
             Draw_DrawFormattedString(20, 58 + i * SPACING_Y, i == sel ? COLOR_LIME : COLOR_WHITE,
                 "%s backup %d%s", i == sel ? ">" : " ", (int)i, i == 0 ? " (newest)" : "");
 
         if (status == 1)
-            Draw_DrawString(10, 58 + 4 * SPACING_Y, COLOR_LIME, "Restored. Colours reloaded.");
+            Draw_DrawString(10, 58 + 4 * SPACING_Y, COLOR_LIME, Lang(STR_RESTORED_COLOURS_RELOADED));
         else if (status == 2)
-            Draw_DrawString(10, 58 + 4 * SPACING_Y, COLOR_RED, "That backup was not found.");
+            Draw_DrawString(10, 58 + 4 * SPACING_Y, COLOR_RED, Lang(STR_THAT_BACKUP_WAS_NOT_FOUND));
 
-        Draw_DrawString(10, 210, COLOR_WHITE, "A: restore   B: back");
+        Draw_DrawString(10, 210, COLOR_WHITE, Lang(STR_A_RESTORE_B_BACK));
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
@@ -1199,7 +1211,7 @@ void RosalinaMenu_RestoreSettings(void)
                 g_colorsLoaded = false;
                 AccentColor_EnsureLoaded();
                 status = 1;
-                LogLine("settings restored from backup");
+                LogLine("[設定をバックアップから復元しました] / [settings restored from backup]");
             }
             else
                 status = 2;
@@ -1256,6 +1268,272 @@ static u32 FileBrowser_Load(const char *path)
     }
 
     return count;
+}
+
+#define FB_CLIP_NONE  0
+#define FB_CLIP_COPY  1
+#define FB_CLIP_CUT   2
+
+static char g_fbClipPath[512];
+static bool g_fbClipIsDir;
+static u32  g_fbClipMode;
+
+static u8   g_fbCopyBuf[0x8000];
+
+static void FileBrowser_Join(char *dst, u32 dstSize, const char *dir, const char *name)
+{
+    u32 i = 0, j = 0;
+
+    while (dir[i] != 0 && i + 1 < dstSize)
+    {
+        dst[i] = dir[i];
+        ++i;
+    }
+    if (i == 0 || dst[i - 1] != '/')
+    {
+        if (i + 1 < dstSize)
+            dst[i++] = '/';
+    }
+    while (name[j] != 0 && i + 1 < dstSize)
+        dst[i++] = name[j++];
+
+    dst[i] = 0;
+}
+
+static const char *FileBrowser_BaseName(const char *path)
+{
+    const char *base = path;
+
+    for (const char *p = path; *p != 0; ++p)
+        if (*p == '/' && p[1] != 0)
+            base = p + 1;
+
+    return base;
+}
+
+static bool FileBrowser_IsPrefixOf(const char *prefix, const char *path)
+{
+    u32 i = 0;
+
+    while (prefix[i] != 0)
+    {
+        if (path[i] != prefix[i])
+            return false;
+        ++i;
+    }
+
+    return path[i] == 0 || path[i] == '/';
+}
+
+static Result FileBrowser_CopyFile(const char *src, const char *dst)
+{
+    IFile in, out;
+    Result res;
+    u64 size = 0;
+
+    res = IFile_Open(&in, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
+                     fsMakePath(PATH_ASCII, src), FS_OPEN_READ);
+    if (R_FAILED(res))
+        return res;
+
+    IFile_GetSize(&in, &size);
+
+    SdmcDeleteFile(dst);
+
+    res = IFile_Open(&out, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
+                     fsMakePath(PATH_ASCII, dst), FS_OPEN_CREATE | FS_OPEN_WRITE);
+    if (R_FAILED(res))
+    {
+        IFile_Close(&in);
+        return res;
+    }
+
+    in.pos = 0;
+    out.pos = 0;
+
+    while (in.pos < size)
+    {
+        u64 read = 0, written = 0;
+
+        res = IFile_Read(&in, &read, g_fbCopyBuf, sizeof(g_fbCopyBuf));
+        if (R_FAILED(res) || read == 0)
+            break;
+
+        res = IFile_Write(&out, &written, g_fbCopyBuf, (u32)read, FS_WRITE_FLUSH);
+        if (R_FAILED(res))
+            break;
+    }
+
+    IFile_Close(&out);
+    IFile_Close(&in);
+
+    return res;
+}
+
+static Result FileBrowser_CopyTree(const char *src, const char *dst, bool isDir, u32 depth)
+{
+    FS_Archive archive = 0;
+    Result res;
+
+    if (!isDir)
+        return FileBrowser_CopyFile(src, dst);
+
+    if (depth > 8)
+        return -1;
+
+    res = FSUSER_OpenArchive(&archive, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""));
+    if (R_FAILED(res))
+        return res;
+
+    FSUSER_CreateDirectory(archive, fsMakePath(PATH_ASCII, dst), 0);
+
+    Handle dir = 0;
+    res = FSUSER_OpenDirectory(&dir, archive, fsMakePath(PATH_ASCII, src));
+    if (R_FAILED(res))
+    {
+        FSUSER_CloseArchive(archive);
+        return res;
+    }
+
+    for (;;)
+    {
+        FS_DirectoryEntry entry;
+        u32 n = 0;
+
+        if (R_FAILED(FSDIR_Read(dir, &n, 1, &entry)) || n == 0)
+            break;
+
+        char name[64];
+        int units = utf16_to_utf8((u8 *)name, entry.name, sizeof(name) - 1);
+        if (units < 0)
+            continue;
+        name[units] = 0;
+
+        char childSrc[512];
+        char childDst[512];
+
+        FileBrowser_Join(childSrc, sizeof(childSrc), src, name);
+        FileBrowser_Join(childDst, sizeof(childDst), dst, name);
+
+        FileBrowser_CopyTree(childSrc, childDst, (entry.attributes & 1) != 0, depth + 1);
+    }
+
+    FSDIR_Close(dir);
+    FSUSER_CloseArchive(archive);
+
+    return 0;
+}
+
+static Result FileBrowser_Delete(const char *path, bool isDir)
+{
+    FS_Archive archive = 0;
+    Result res;
+
+    res = FSUSER_OpenArchive(&archive, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""));
+    if (R_FAILED(res))
+        return res;
+
+    if (isDir)
+        res = FSUSER_DeleteDirectoryRecursively(archive, fsMakePath(PATH_ASCII, path));
+    else
+        res = FSUSER_DeleteFile(archive, fsMakePath(PATH_ASCII, path));
+
+    FSUSER_CloseArchive(archive);
+    return res;
+}
+
+static Result FileBrowser_Rename(const char *src, const char *dst, bool isDir)
+{
+    FS_Archive archive = 0;
+    Result res;
+
+    res = FSUSER_OpenArchive(&archive, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""));
+    if (R_FAILED(res))
+        return res;
+
+    if (isDir)
+        res = FSUSER_RenameDirectory(archive, fsMakePath(PATH_ASCII, src), archive, fsMakePath(PATH_ASCII, dst));
+    else
+        res = FSUSER_RenameFile(archive, fsMakePath(PATH_ASCII, src), archive, fsMakePath(PATH_ASCII, dst));
+
+    FSUSER_CloseArchive(archive);
+    return res;
+}
+
+static Result FileBrowser_MakeDir(const char *path)
+{
+    FS_Archive archive = 0;
+    Result res;
+
+    res = FSUSER_OpenArchive(&archive, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""));
+    if (R_FAILED(res))
+        return res;
+
+    res = FSUSER_CreateDirectory(archive, fsMakePath(PATH_ASCII, path), 0);
+    FSUSER_CloseArchive(archive);
+    return res;
+}
+
+static void FileBrowser_Notify(const char *title, const char *msg, bool ok)
+{
+    Draw_Lock();
+    Draw_ClearFramebuffer();
+    Draw_DrawString(10, 4, COLOR_TITLE, title);
+    Draw_DrawString(10, 4 + 3 * SPACING_Y, ok ? COLOR_LIME : COLOR_RED, msg);
+    Draw_DrawString(10, 220, COLOR_WHITE, Lang(STR_PRESS_ANY_BUTTON));
+    Draw_FlushFramebuffer();
+    Draw_Unlock();
+    waitInput();
+}
+
+static void FileBrowser_Paste(const char *destDir)
+{
+    char dst[512];
+    Result res;
+
+    if (g_fbClipMode == FB_CLIP_NONE)
+    {
+        FileBrowser_Notify("Paste", "Clipboard is empty.", false);
+        return;
+    }
+
+    FileBrowser_Join(dst, sizeof(dst), destDir, FileBrowser_BaseName(g_fbClipPath));
+
+    if (g_fbClipIsDir && FileBrowser_IsPrefixOf(g_fbClipPath, destDir))
+    {
+        FileBrowser_Notify("Paste", "Cannot paste a folder into itself.", false);
+        return;
+    }
+
+    if (g_fbClipMode == FB_CLIP_CUT)
+    {
+        res = FileBrowser_Rename(g_fbClipPath, dst, g_fbClipIsDir);
+        if (R_SUCCEEDED(res))
+        {
+            g_fbClipMode = FB_CLIP_NONE;
+            FileBrowser_Notify("Move", "Moved.", true);
+            return;
+        }
+    }
+
+    res = FileBrowser_CopyTree(g_fbClipPath, dst, g_fbClipIsDir, 0);
+
+    if (R_FAILED(res))
+    {
+        FileBrowser_Notify("Paste", "Failed.", false);
+        return;
+    }
+
+    if (g_fbClipMode == FB_CLIP_CUT)
+    {
+        FileBrowser_Delete(g_fbClipPath, g_fbClipIsDir);
+        g_fbClipMode = FB_CLIP_NONE;
+        FileBrowser_Notify("Move", "Moved.", true);
+    }
+    else
+    {
+        FileBrowser_Notify("Copy", "Copied.", true);
+    }
 }
 
 static void FileBrowser_Up(char *path)
@@ -1323,7 +1601,11 @@ void RosalinaMenu_FileBrowser(void)
             y += SPACING_Y;
         }
 
-        Draw_DrawString(10, 225, COLOR_WHITE, "A: open   B: up / exit");
+        Draw_DrawFormattedString(10, 203, COLOR_WHITE, "Clipboard: %s%s   ",
+            g_fbClipMode == FB_CLIP_NONE ? "(empty)" : (g_fbClipMode == FB_CLIP_CUT ? "[cut] " : "[copy] "),
+            g_fbClipMode == FB_CLIP_NONE ? "" : FileBrowser_BaseName(g_fbClipPath));
+        Draw_DrawString(10, 214, COLOR_WHITE, Lang(STR_A_OPEN_X_COPY_Y_CUT_R_PASTE));
+        Draw_DrawString(10, 225, COLOR_WHITE, Lang(STR_SELECT_DELETE_START_RENAME_L_NEW_DIR));
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
@@ -1363,6 +1645,77 @@ void RosalinaMenu_FileBrowser(void)
             if (atRoot) break;
             FileBrowser_Up(path);
             count = FileBrowser_Load(path); sel = 0; scroll = 0;
+        }
+        else if (k & BUTTON_R1)
+        {
+            FileBrowser_Paste(path);
+            count = FileBrowser_Load(path);
+        }
+        else if (k & BUTTON_L1)
+        {
+            char name[64];
+
+            if (TextInput_Prompt("New folder name", name, sizeof(name), NULL))
+            {
+                char full[512];
+                FileBrowser_Join(full, sizeof(full), path, name);
+
+                if (R_SUCCEEDED(FileBrowser_MakeDir(full)))
+                    count = FileBrowser_Load(path);
+                else
+                    FileBrowser_Notify("New folder", "Failed.", false);
+            }
+        }
+        else if (k & (BUTTON_X | BUTTON_Y | BUTTON_SELECT | BUTTON_START))
+        {
+            s32 e = sel - (atRoot ? 0 : 1);
+
+            if (e < 0 || e >= (s32)count)
+                continue;
+
+            char full[512];
+            bool isDir = g_fbDir[e];
+            FileBrowser_Join(full, sizeof(full), path, g_fbName[e]);
+
+            if (k & (BUTTON_X | BUTTON_Y))
+            {
+                u32 i = 0;
+                while (full[i] != 0 && i + 1 < sizeof(g_fbClipPath))
+                {
+                    g_fbClipPath[i] = full[i];
+                    ++i;
+                }
+                while (i > 1 && g_fbClipPath[i - 1] == '/')
+                    --i;
+                g_fbClipPath[i] = 0;
+                g_fbClipIsDir = isDir;
+                g_fbClipMode = (k & BUTTON_X) ? FB_CLIP_COPY : FB_CLIP_CUT;
+            }
+            else if (k & BUTTON_SELECT)
+            {
+                if (ConfirmPrompt("Delete", isDir ? "Delete this folder and everything in it?" : "Delete this file?", g_fbName[e]))
+                {
+                    if (R_SUCCEEDED(FileBrowser_Delete(full, isDir)))
+                        count = FileBrowser_Load(path);
+                    else
+                        FileBrowser_Notify("Delete", "Failed.", false);
+                }
+            }
+            else
+            {
+                char name[64];
+
+                if (TextInput_Prompt("Rename", name, sizeof(name), g_fbName[e]))
+                {
+                    char dst[512];
+                    FileBrowser_Join(dst, sizeof(dst), path, name);
+
+                    if (R_SUCCEEDED(FileBrowser_Rename(full, dst, isDir)))
+                        count = FileBrowser_Load(path);
+                    else
+                        FileBrowser_Notify("Rename", "Failed.", false);
+                }
+            }
         }
     }
     while (!terminationRequest);

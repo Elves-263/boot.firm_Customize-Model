@@ -34,6 +34,7 @@
 #include "utils.h"
 #include "plgloader.h"
 #include "menus/n3ds.h"
+#include "menus/battery.h"
 #include "menus/cheats.h"
 #include "minisoc.h"
 
@@ -186,6 +187,8 @@ void    menuThreadMain(void)
 
             homeBtnPressed = 0;
         }
+
+        Battery_Sample();
 
         svcSleepThread(50 * 1000 * 1000LL);
     }

@@ -74,7 +74,7 @@ $(dir_build)/%.bin.o: $(dir_build)/%.bin
 
 $(dir_build)/%.bin: $(dir_patches)/%.s
 	@mkdir -p "$(@D)"
-	@armips $<
+	armips $<
 
 $(dir_build)/memory.o $(dir_build)/strings.o: CFLAGS += -O3
 

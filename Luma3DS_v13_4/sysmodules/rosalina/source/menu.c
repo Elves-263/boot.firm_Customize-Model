@@ -26,6 +26,7 @@
 
 #include <3ds.h>
 #include "menu.h"
+#include "menus/battery.h"
 #include "draw.h"
 #include "fmt.h"
 #include "memory.h"
@@ -376,6 +377,7 @@ void menuThreadMain(void)
             continue;
 
         Cheat_ApplyCheats();
+        Battery_Sample();
 
         u32 kHeld = scanHeldKeys();
 

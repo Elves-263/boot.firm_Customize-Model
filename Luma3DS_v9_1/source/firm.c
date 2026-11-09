@@ -282,6 +282,7 @@ bool loadAltBootFirm(void)
 
 #define OTHER_FIRM_READ_PATH "/3ds/luma/13.4/boot.firm"
 #define OTHER_FIRM_ARGV_PATH "sdmc:/3ds/luma/13.4/boot.firm"
+#define BOOT_FIRM_PATH       "/boot.firm"
 
 bool loadVersionFirm(const char *target)
 {
@@ -299,13 +300,13 @@ bool loadVersionFirm(const char *target)
 
     if(payloadSize <= 0x200 || !checkFirm(payloadSize)) return false;
 
+    fileWrite(firm, BOOT_FIRM_PATH, payloadSize);
+
     char *argv[2] = {(char *)OTHER_FIRM_ARGV_PATH, (char *)fbs};
-    bool wantsScreenInit = (firm->reserved2[0] & 1) != 0;
 
-    if(wantsScreenInit)
-        initScreens();
+    initScreens();
 
-    launchFirm(wantsScreenInit ? 2 : 1, argv);
+    launchFirm((firm->reserved2[0] & 1) ? 2 : 1, argv);
 
     return true;
 }

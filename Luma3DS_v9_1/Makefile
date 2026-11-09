@@ -175,7 +175,7 @@ $(dir_build)/arm9_exceptions.bin: $(dir_arm9_exceptions)
 
 $(dir_build)/%.bin: $(dir_patches)/%.s
 	@mkdir -p "$(@D)"
-	@armips $<
+	armips $<
 
 $(dir_build)/memory.o $(dir_build)/strings.o: CFLAGS += -O3
 $(dir_build)/config.o: CFLAGS += -DCONFIG_TITLE="\"$(name) $(revision) configuration\""

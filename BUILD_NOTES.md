@@ -23,6 +23,19 @@ v9.1 → v13.4 の順に続けてビルドします。**v9.1 が失敗したら 
 
 必要なもの: devkitARM, armips, makerom, firmtool, git, make。
 
+`build.sh` は開始時に各ツールを実際に起動して確認します。存在するのに起動できない
+場合（DLL 不足など）もそこで止まり、パスと終了コードを表示します。
+
+**armips は devkitPro の `3ds-dev` に含まれていません。** `3ds-dev` の中身は
+3dslink / 3dstools / devkitARM / devkitARM-gdb / general-tools / picasso / tex3ds
+です。armips は https://github.com/Kingcom/armips/releases から取得し、PATH の
+通ったフォルダ（例: `C:\devkitPro\msys2\usr\local\bin`）に置いてください。
+32bit 版は Visual C++ 2015 x86 再頒布可能パッケージも必要で、これが無いと
+起動に失敗して make が「エラー 127」で止まります。
+
+armips を使うのは **v9.1 だけ** です。v13.4 は使いません。armips が用意できない
+うちは `ONLY=v13.4` で v13.4 だけ先にビルドできます。
+
 `firmtool` が MSYS2 から見えない場合、build.sh が Windows 側の Python の Scripts
 フォルダなどを自動で探して PATH に足します。恒久的に通しておきたいときは:
 

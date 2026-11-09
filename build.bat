@@ -10,8 +10,18 @@ rem  because Makefiles here need Unix tools (make, sed, awk, git,
 rem  armips, makerom, firmtool) that cmd.exe cannot run directly.
 rem
 rem  One-time setup:
-rem    1) Install devkitPro (3ds-dev, which includes armips + makerom)
+rem    1) Install devkitPro with 3DS support
 rem         https://devkitpro.org/wiki/Getting_Started
+rem         dkp-pacman -S 3ds-dev
+rem       NOTE: the 3ds-dev group is 3dslink / 3dstools / devkitARM /
+rem       devkitARM-gdb / general-tools / picasso / tex3ds.  armips is NOT
+rem       in it and must be installed separately (v9.1 needs it; v13.4
+rem       does not).  Get armips from
+rem         https://github.com/Kingcom/armips/releases
+rem       and drop armips.exe into a folder on PATH, e.g.
+rem         C:\devkitPro\msys2\usr\local\bin
+rem       The 32-bit build also needs the Visual C++ 2015 x86 Redistributable,
+rem       otherwise it fails to launch and make reports error 127.
 rem    2) pip install firmtool
 rem    3) Install 7-Zip (used to auto-extract the inner .7z sources)
 rem
@@ -98,14 +108,21 @@ rem ---- extract <archive> into folder <dir> (skip if <dir> exists) ----
 :extract
 set "DEST=%~1"
 set "ARCH=%~2"
-if exist "%DEST%\" (
-  echo   %DEST%\ already exists, skipping extraction.
-  goto :eof
-)
 if not exist "%ARCH%" (
   echo   [WARN] %ARCH% not found.
   goto :eof
 )
+rem Re-extract when the archive has changed since the folder was made.
+rem Skipping purely because the folder exists silently builds stale sources.
+set "STAMP=%DEST%\.extracted-from"
+for %%F in ("%ARCH%") do set "ASTAMP=%%~tF %%~zF"
+set "OLDSTAMP="
+if exist "%STAMP%" set /p OLDSTAMP=<"%STAMP%"
+if exist "%DEST%\" if "!OLDSTAMP!"=="!ASTAMP!" (
+  echo   %DEST%\ matches %ARCH%, skipping extraction.
+  goto :eof
+)
+if exist "%DEST%\" echo   %ARCH% differs from %DEST%\ - refreshing sources.
 set "SEVENZIP="
 for %%P in (7z.exe) do if not defined SEVENZIP if not "%%~$PATH:P"=="" set "SEVENZIP=%%~$PATH:P"
 if not defined SEVENZIP if exist "%ProgramFiles%\7-Zip\7z.exe" set "SEVENZIP=%ProgramFiles%\7-Zip\7z.exe"
@@ -119,6 +136,7 @@ if not defined SEVENZIP (
 if errorlevel 1 (
   echo   [WARN] Failed to extract %ARCH%.
 ) else (
+  > "%STAMP%" echo !ASTAMP!
   echo   %ARCH% -^> %DEST%\
 )
 goto :eof

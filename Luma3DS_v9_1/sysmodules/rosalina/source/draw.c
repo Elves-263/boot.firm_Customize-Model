@@ -112,6 +112,14 @@ u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...
     return Draw_DrawString(posX, posY, color, buf);
 }
 
+u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *romaji, const char *english)
+{
+    posY = Draw_DrawFormattedString(posX, posY, color, "[%s]", romaji);
+    posY = Draw_DrawFormattedString(posX, posY + SPACING_Y, color, "[%s]", english);
+
+    return posY;
+}
+
 void Draw_FillFramebuffer(u32 value)
 {
     memset32(FB_BOTTOM_VRAM_ADDR, value, FB_BOTTOM_SIZE);

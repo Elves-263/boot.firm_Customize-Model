@@ -16,6 +16,23 @@ set -Eeuo pipefail
 : "${DEVKITARM:?export DEVKITARM first}"
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+# devkitARM の 3ds_rules も libctru の Makefile も $(CURDIR) をクォートせずに
+# 再帰 make へ渡す。パスに空白や括弧が入っていると、その先の bash が
+# 「予期しないトークン `(' 周辺に構文エラー」で落ちる。
+# ここで弾かないと libctru のビルド中に意味不明なエラーとして出る。
+case "$ROOT" in
+  *[!A-Za-z0-9/._-]*)
+    echo "!! このフォルダのパスに、make が扱えない文字が含まれています:" >&2
+    echo "     $ROOT" >&2
+    echo >&2
+    echo "   devkitARM の Makefile はパスをクォートしないため、空白・括弧・" >&2
+    echo "   日本語などが入っているとビルドできません。" >&2
+    echo "   英数字と _ - . だけのパスに移動するか、フォルダ名を変えてください。" >&2
+    echo "   例: Luma3DS_Source_patched (1)  ->  Luma3DS_Source_patched" >&2
+    exit 1 ;;
+esac
+
 CACHE="$ROOT/.libctru"
 DIST="$ROOT/dist"
 LOG="$ROOT/build.log"
@@ -78,12 +95,49 @@ if ! command -v firmtool >/dev/null 2>&1; then
 fi
 export PATH
 
-need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1" >&2; exit 1; }; }
-need git
-need make
-need armips
-need makerom
-need firmtool
+# 存在確認だけでなく実際に起動する。「PATH にはあるがランタイム DLL が無くて
+# 起動できない」ケースは command -v では素通りし、make の中で 127 になって
+# 原因が見えなくなるため。
+#
+# 終了コードだけでは「起動できなかった 127」と「起動したがその引数を
+# 受け付けず 127 を返した」を区別できない。出力が 1 バイトでもあれば
+# プロセスは動いているので、無出力かつ 126 以上のときだけ失敗とみなす。
+need() {
+  local tool="$1" probe="${2:-}" path out rc=0
+  path="$(command -v "$tool" 2>/dev/null || true)"
+  if [ -z "$path" ]; then
+    echo "!! $tool が PATH にありません。" >&2
+    return 1
+  fi
+  out="$("$tool" $probe 2>&1)" || rc=$?
+  if [ "$rc" -ge 126 ] && [ -z "$out" ]; then
+    echo "!! $tool は $path にありますが起動できません (終了コード $rc、出力なし)。" >&2
+    echo "   Windows ネイティブの exe なら必要なランタイム DLL が足りていません。" >&2
+    echo "   32bit なら vc_redist.x86、64bit なら vc_redist.x64 を入れてください。" >&2
+    echo "   ビット数の確認: file $path" >&2
+    return 1
+  fi
+  printf '  %-10s %s\n' "$tool" "$path"
+}
+
+echo "使用するツール:"
+toolfail=0
+need git --version       || toolfail=1
+need make --version      || toolfail=1
+need makerom             || toolfail=1
+need firmtool --help     || toolfail=1
+if [ "$ONLY" != "v13.4" ]; then
+  need armips --version  || toolfail=1
+fi
+if [ "$toolfail" != "0" ]; then
+  echo >&2
+  echo "必要なツールが揃っていません。" >&2
+  echo "armips が使えないだけなら、v13.4 は armips を必要としないので回避できます:" >&2
+  echo "  ONLY=v13.4 ./build.sh    (Windows: set ONLY=v13.4 & build.bat)" >&2
+  echo "makerom / firmtool は両バージョンで必要なので、これらは回避できません。" >&2
+  exit 1
+fi
+echo
 
 build_libctru() {
   local ver="$1"

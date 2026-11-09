@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "csvc.h"
+#include "menus/lang.h"
 #include "plugin.h"
 #include "ifile.h"
 #include "ifile.h"
@@ -56,6 +57,8 @@ static char     g_pluginEntries[MAX_PLUGIN_ENTRIES][256];
 static bool     g_pluginEntryOk[MAX_PLUGIN_ENTRIES];
 static u32      g_pluginEntryCount;
 static u32      g_pluginEntryOkCount;
+static char     g_pluginDir[300];
+static u64      g_pluginHash;
 
 static Result   EnumeratePluginFiles(u64 tid)
 {
@@ -82,6 +85,7 @@ static Result   EnumeratePluginFiles(u64 tid)
     }
 
     strcat(g_path, "/");
+    strcpy(g_pluginDir, g_path);
 
     while (R_SUCCEEDED(FSDIR_Read(dir, &entriesNb, 10, entries)) && entriesNb != 0)
     {
@@ -243,7 +247,7 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
     {
         Draw_Lock();
         Draw_DrawString(10, 10, COLOR_TITLE, "Plugin selector");
-        Draw_DrawString(10, 30, COLOR_WHITE, "A: use   X: pin/unpin   B: none");
+        Draw_DrawString(10, 30, COLOR_WHITE, Lang(STR_A_USE_X_PIN_UNPIN_B_NONE));
 
         u32 posY = 50;
         for (u32 i = 0; i < g_pluginEntryCount; ++i)
@@ -371,72 +375,207 @@ static Result   FindPluginFile(u64 tid)
     return 0;
 }
 
-static char     *memstr(const char *haystack, const char *needle, u32 size)
+typedef struct DestructiveKeyword
 {
-    u32     needleLen = strlen(needle);
+    const char *text;
+    u32         weight;
+} DestructiveKeyword;
 
-    if (needleLen == 0 || size < needleLen)
-        return NULL;
-
-    for (const char *p = haystack; p <= haystack + size - needleLen; ++p)
-    {
-        if (memcmp(p, needle, needleLen) == 0)
-            return (char *)p;
-    }
-
-    return NULL;
-}
-
-static const char *const g_destructiveKeywords[] =
+static const DestructiveKeyword g_destructiveKeywords[] =
 {
-    "cias", "boot.firm", "gm9", "DCIM", "JKSV", "Splashes", "boot9strap", "private", "Nintendo 3DS", "fbi"
+    { "boot9strap",   40 },
+    { "boot.firm",    40 },
+    { "/private",     25 },
+    { "/cias",        20 },
+    { "/gm9",         20 },
+    { "/fbi",         20 },
+    { "Nintendo 3DS", 15 },
+    { "/DCIM",        10 },
+    { "/JKSV",        10 },
+    { "/Splashes",    10 },
 };
 #define DESTRUCTIVE_KEYWORD_COUNT (sizeof(g_destructiveKeywords) / sizeof(g_destructiveKeywords[0]))
-#define DESTRUCTIVE_KEYWORD_MAXLEN 12
+
+static char lowerAscii(char c)
+{
+    return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+}
+
+static s32 memstrCaseless(const char *hay, u32 hayLen, const char *needle, u32 needleLen)
+{
+    if (needleLen == 0 || hayLen < needleLen)
+        return -1;
+
+    for (u32 i = 0; i + needleLen <= hayLen; ++i)
+    {
+        u32 j = 0;
+
+        while (j < needleLen && lowerAscii(hay[i + j]) == lowerAscii(needle[j]))
+            ++j;
+
+        if (j == needleLen)
+            return (s32)i;
+    }
+
+    return -1;
+}
+
+#define APPROVED_CACHE_SIZE 32
+
+static u64      g_approvedHashes[APPROVED_CACHE_SIZE];
+static u32      g_approvedCount;
+
+static bool     IsHashApproved(u64 hash)
+{
+    for (u32 i = 0; i < g_approvedCount; ++i)
+        if (g_approvedHashes[i] == hash)
+            return true;
+
+    return false;
+}
+
+static void     RememberApproval(u64 hash)
+{
+    if (IsHashApproved(hash))
+        return;
+
+    if (g_approvedCount < APPROVED_CACHE_SIZE)
+    {
+        g_approvedHashes[g_approvedCount++] = hash;
+        return;
+    }
+
+    for (u32 i = 1; i < APPROVED_CACHE_SIZE; ++i)
+        g_approvedHashes[i - 1] = g_approvedHashes[i];
+
+    g_approvedHashes[APPROVED_CACHE_SIZE - 1] = hash;
+}
+
+static void     DrawMatchDetails(IFile *plugin, const bool *found, const u32 *offsets)
+{
+    static char raw[32];
+    char        text[25];
+    u64         total;
+    u32         posY = 30;
+
+    Draw_DrawString(10, 10, COLOR_TITLE, Lang(STR_MATCHED_LOCATIONS));
+
+    for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
+    {
+        u32 n = 0;
+
+        if (!found[i])
+            continue;
+
+        u32 base = offsets[i] > 8 ? offsets[i] - 8 : 0;
+
+        plugin->pos = base;
+        if (R_SUCCEEDED(IFile_Read(plugin, &total, raw, 24)))
+        {
+            u32 got = (u32)total > 24 ? 24 : (u32)total;
+
+            for (n = 0; n < got; ++n)
+            {
+                char c = raw[n];
+                text[n] = (c >= 0x20 && c < 0x7F) ? c : '.';
+            }
+        }
+        text[n] = 0;
+
+        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "%08lx %-12s %s\n",
+                                        offsets[i], g_destructiveKeywords[i].text, text);
+    }
+
+    plugin->pos = 0;
+}
 
 static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
 {
     static char buffer[2000];
     u64         offset = 0;
     u64         total;
+    u64         hash = 0xCBF29CE484222325ULL;
+    u64         hashed = 0;
     bool        found[DESTRUCTIVE_KEYWORD_COUNT] = { false };
+    u32         matchOffset[DESTRUCTIVE_KEYWORD_COUNT] = { 0 };
+    u32         keywordLen[DESTRUCTIVE_KEYWORD_COUNT];
+    bool        readFailed = false;
+    u32         maxLen = 1;
+
+    for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
+    {
+        keywordLen[i] = (u32)strlen(g_destructiveKeywords[i].text);
+        if (keywordLen[i] > maxLen)
+            maxLen = keywordLen[i];
+    }
+
+    if (maxLen >= sizeof(buffer))
+        maxLen = sizeof(buffer) - 1;
 
     while (offset < fileSize)
     {
         u32 chunk = (u32)((fileSize - offset) > sizeof(buffer) ? sizeof(buffer) : (fileSize - offset));
 
         plugin->pos = offset;
-        if (R_FAILED(IFile_Read(plugin, &total, buffer, chunk)))
+        if (R_FAILED(IFile_Read(plugin, &total, buffer, chunk)) || (u32)total != chunk)
+        {
+            readFailed = true;
             break;
+        }
 
         for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
         {
-            if (!found[i] && memstr(buffer, g_destructiveKeywords[i], chunk) != NULL)
+            if (found[i])
+                continue;
+
+            s32 at = memstrCaseless(buffer, chunk, g_destructiveKeywords[i].text, keywordLen[i]);
+            if (at >= 0)
+            {
                 found[i] = true;
+                matchOffset[i] = (u32)(offset + (u32)at);
+            }
         }
 
-        offset += (chunk > DESTRUCTIVE_KEYWORD_MAXLEN && offset + chunk < fileSize)
-            ? chunk - (DESTRUCTIVE_KEYWORD_MAXLEN - 1) : chunk;
+        u32 fresh = (offset >= hashed) ? 0 : (u32)(hashed - offset);
+        for (u32 i = fresh; i < chunk; ++i)
+        {
+            hash ^= (u8)buffer[i];
+            hash *= 0x100000001B3ULL;
+        }
+        if (offset + chunk > hashed)
+            hashed = offset + chunk;
+
+        offset += (chunk > maxLen && offset + chunk < fileSize)
+            ? chunk - (maxLen - 1) : chunk;
     }
 
     plugin->pos = 0;
+    g_pluginHash = hash;
 
-    u32 hits = 0;
+    u32 risk = 0;
     for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
         if (found[i])
-            ++hits;
+            risk += g_destructiveKeywords[i].weight;
 
-    u32 risk = hits * (100 / DESTRUCTIVE_KEYWORD_COUNT);
+    if (risk > 100)
+        risk = 100;
 
-    if (risk == 0)
+    if (risk == 0 && !readFailed)
+        return true;
+
+    if (!readFailed && IsHashApproved(hash))
         return true;
 
     const char  *warningText = risk <= 20 ? "little dangerous" : risk <= 40 ? "moderately dangerous" : "very dangerous";
     char        textBuf[64];
     u32         keys;
     bool        result = true;
+    bool        details = false;
 
-    sprintf(textBuf, "Risk : %u%% (%s)", (unsigned)risk, warningText);
+    if (readFailed)
+        sprintf(textBuf, "Could not scan the whole file");
+    else
+        sprintf(textBuf, "Risk : %u%% (%s)", (unsigned)risk, warningText);
 
     char matched[256];
     matched[0] = 0;
@@ -446,31 +585,57 @@ static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
         {
             if (matched[0] != 0 && (u32)(strlen(matched) + 2) < (u32)sizeof(matched))
                 strcat(matched, ", ");
-            if ((u32)(strlen(matched) + strlen(g_destructiveKeywords[i]) + 1) < (u32)sizeof(matched))
-                strcat(matched, g_destructiveKeywords[i]);
+            if ((u32)(strlen(matched) + strlen(g_destructiveKeywords[i].text) + 1) < (u32)sizeof(matched))
+                strcat(matched, g_destructiveKeywords[i].text);
         }
     }
+
+    if (matched[0] == 0)
+        strcat(matched, "(none)");
 
     menuEnter();
 
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_RED, "--- WARNING ---");
-        u32 posY = Draw_DrawString(30, 30, COLOR_WHITE, "This 3gx may be a destructive plugin!");
-        posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, textBuf);
-        posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, "Matched keywords:");
-        posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_YELLOW, matched);
-        Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, "A: use it anyway   B: don't use it");
+        Draw_ClearFramebuffer();
+
+        if (details)
+        {
+            DrawMatchDetails(plugin, found, matchOffset);
+            Draw_DrawString(10, 205, COLOR_WHITE, Lang(STR_X_BACK_TO_THE_WARNING));
+        }
+        else
+        {
+            Draw_DrawString(10, 10, COLOR_RED, "--- KEIKOKU / WARNING ---");
+            u32 posY = readFailed
+                ? Draw_DrawBilingual(30, 30, COLOR_WHITE, "Kono 3gx wa saigo made kensa dekimasen",
+                                     "This 3gx could not be fully checked")
+                : Draw_DrawBilingual(30, 30, COLOR_WHITE, "Kono 3gx wa hakaiteki kamo shiremasen",
+                                     "This 3gx may be a destructive plugin");
+            posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, textBuf);
+            posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, "Matched keywords:");
+            posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_YELLOW, matched);
+            Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, "X: basho wo hyouji / show where found");
+            Draw_DrawString(10, 205, COLOR_WHITE, "A: sonomama tsukau / use anyway");
+            Draw_DrawString(10, 216, COLOR_WHITE, "B: tsukawanai / don't use it");
+        }
+
         Draw_FlushFramebuffer();
         Draw_Unlock();
 
         keys = waitInput();
+
+        if (keys & KEY_X)
+            details = !details;
     }
     while (!(keys & (KEY_A | KEY_B)) && !menuShouldExit);
 
     if (menuShouldExit || (keys & KEY_B))
         result = false;
+
+    if (result && !readFailed)
+        RememberApproval(hash);
 
     menuLeave();
     return result;
