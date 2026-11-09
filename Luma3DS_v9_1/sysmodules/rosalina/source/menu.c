@@ -224,6 +224,8 @@ void menuLeave(void)
 
 static u32 menuScrollOffset;
 
+u8 g_menuWorkBuf[MENU_WORK_BUF_SIZE];
+
 static void menuDraw(Menu *menu, u32 selected)
 {
     char versionString[16];
@@ -256,10 +258,13 @@ static void menuDraw(Menu *menu, u32 selected)
         sprintf(versionString, "v%u.%u.%u", GET_VERSION_MAJOR(version), GET_VERSION_MINOR(version), GET_VERSION_REVISION(version));
 
     AccentColor_EnsureLoaded();
+    u32 tagCol = strlen(menu->title) + 1;
+    if (tagCol < 15)
+        tagCol = 15;
     Draw_DrawString(10, 10, g_accentColor, menu->title);
-    Draw_DrawString(10 + 15 * SPACING_X, 10, g_accentColor, "[v" FORK_LUMA_VERSION "]");
+    Draw_DrawString(10 + tagCol * SPACING_X, 10, g_accentColor, "[" FORK_PACKAGE_TAG "]");
     if (g_safeMode)
-        Draw_DrawString(10 + 22 * SPACING_X, 10, COLOR_RED, "SAFE");
+        Draw_DrawString(10 + (tagCol + sizeof("[" FORK_PACKAGE_TAG "]")) * SPACING_X, 10, COLOR_RED, "SAFE");
 
     u32 nbItems = menu->nbItems;
 
@@ -532,7 +537,7 @@ void    DisplayPluginMenu(u32   *cmdbuf)
             }
 
             
-            if (hints[cursor])
+            if (hints[cursor][0])
                 Draw_DrawString(10, 200, COLOR_TITLE, hints[cursor]);
         }
 

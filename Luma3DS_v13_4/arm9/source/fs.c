@@ -158,6 +158,11 @@ bool fileDelete(const char *path)
     return f_unlink(path) == FR_OK;
 }
 
+bool fileRename(const char *oldPath, const char *newPath)
+{
+    return f_rename(oldPath, newPath) == FR_OK;
+}
+
 bool fileCopy(const char *pathSrc, const char *pathDst, bool replace, void *tmpBuffer, size_t bufferSize)
 {
     FIL fileSrc, fileDst;

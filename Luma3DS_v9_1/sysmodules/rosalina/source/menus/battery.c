@@ -81,6 +81,10 @@ static u32  g_cycleStartSec;
 static u16  g_cycleStartPctQ8;
 static u32  g_chargeTransitions;
 
+static u32  g_mcuFwVersion;
+static u8   g_mcuInfoTable[10];
+static bool g_mcuInfoTableRead;
+
 static bool batteryServiceUsable(const char *name)
 {
     bool registered = false;
@@ -131,6 +135,18 @@ static bool batteryReadMcu(void)
         return false;
 
     res = MCUHWC_ReadRegister(0xA, data, 4);
+
+    if (g_mcuFwVersion == 0)
+    {
+        u8 minor = 0, major = 0;
+        MCUHWC_GetFwVerHigh(&major);
+        MCUHWC_GetFwVerLow(&minor);
+        g_mcuFwVersion = SYSTEM_VERSION(major - 0x10, minor, 0);
+    }
+
+    if (!g_mcuInfoTableRead)
+        g_mcuInfoTableRead = R_SUCCEEDED(MCUHWC_ReadRegister(0x7F, g_mcuInfoTable, sizeof(g_mcuInfoTable)));
+
     svcCloseHandle(*handlePtr);
 
     if (R_FAILED(res))
@@ -382,6 +398,15 @@ static u32 batteryDrawNow(u32 posY)
     posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, Lang(STR_PTM_LEVEL_5), (u32)g_ptmuLevel);
     posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "Shell:         %s\n",
                                     g_shellState ? "open" : "closed");
+
+    if (g_mcuFwVersion != 0)
+        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "MCU firmware:  %lu.%lu\n",
+                                        GET_VERSION_MAJOR(g_mcuFwVersion), GET_VERSION_MINOR(g_mcuFwVersion));
+    if (g_mcuInfoTableRead)
+    {
+        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, Lang(STR_BATTERY_MAKER), (u32)g_mcuInfoTable[2]);
+        posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, Lang(STR_PMIC_MAKER), (u32)g_mcuInfoTable[1]);
+    }
 
     posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, Lang(STR_NOMINAL_PACK_MAH), (u32)BATTERY_NOMINAL_MAH);
     posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, Lang(STR_SAMPLES_HELD),

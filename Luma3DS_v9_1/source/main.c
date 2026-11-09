@@ -189,12 +189,6 @@ void main(int argc, char **argv, u32 magicWord)
             error("Version switch failed: target boot.firm is missing or corrupted.");
     }
 
-    if(getFileSize("chainload_alt.flag") > 0)
-    {
-        fileDelete("chainload_alt.flag");
-        loadAltBootFirm();
-    }
-
     
     if(CFG_BOOTENV && needConfig != CREATE_CONFIGURATION)
     {
@@ -265,9 +259,7 @@ void main(int argc, char **argv, u32 magicWord)
 
     bool autoBootEmu = CONFIG(AUTOBOOTEMU);
 
-    if((pressed & (ALT_BOOT_FIRM_BUTTONS | BUTTON_L1)) == ALT_BOOT_FIRM_BUTTONS && loadAltBootFirm())
-        pressed = HID_PAD;
-    else if((pressed & (BUTTON_START | BUTTON_L1)) == BUTTON_START)
+    if((pressed & (BUTTON_START | BUTTON_L1)) == BUTTON_START)
     {
         loadHomebrewFirm(0);
         pressed = HID_PAD;

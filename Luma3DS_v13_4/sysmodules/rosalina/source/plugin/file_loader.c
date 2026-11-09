@@ -58,7 +58,6 @@ static bool     g_pluginEntryOk[MAX_PLUGIN_ENTRIES];
 static u32      g_pluginEntryCount;
 static u32      g_pluginEntryOkCount;
 static char     g_pluginDir[300];
-static u64      g_pluginHash;
 
 static Result   EnumeratePluginFiles(u64 tid)
 {
@@ -193,6 +192,7 @@ static void     SaveSelection(const char *name)
                                fsMakePath(PATH_ASCII, path), FS_OPEN_CREATE | FS_OPEN_WRITE)))
     {
         IFile_Write(&f, &total, (void *)name, strlen(name), FS_WRITE_FLUSH);
+        IFile_SetSize(&f, strlen(name));
         IFile_Close(&f);
     }
 }
@@ -225,12 +225,16 @@ static s32      NextLoadableEntry(s32 from, s32 step)
     return -1;
 }
 
+#define SELECTOR_ROWS       17
+#define SELECTOR_NAME_WIDTH ((SCROLL_MARK_X - 10) / SPACING_X - 3)
+
 static bool     ShowPluginSelector(char *outName, u32 outSize)
 {
     s32     cursor;
     u32     keys;
     char    pinned[256];
     bool    havePinned;
+    u32     first = 0;
 
     if (g_pluginEntryOkCount == 0)
         return false;
@@ -246,14 +250,23 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
     do
     {
         Draw_Lock();
+        Draw_ClearFramebuffer();
         Draw_DrawString(10, 10, COLOR_TITLE, "Plugin selector");
         Draw_DrawString(10, 30, COLOR_WHITE, Lang(STR_A_USE_X_PIN_UNPIN_B_NONE));
 
-        u32 posY = 50;
-        for (u32 i = 0; i < g_pluginEntryCount; ++i)
+        if (cursor >= 0)
         {
-            char    name[sizeof(g_pluginEntries[0])];
-            char    line[sizeof(name) + 4];
+            if ((u32)cursor < first)
+                first = cursor;
+            else if ((u32)cursor >= first + SELECTOR_ROWS)
+                first = cursor - SELECTOR_ROWS + 1;
+        }
+
+        u32 posY = 50;
+        for (u32 i = first; i < g_pluginEntryCount && i < first + SELECTOR_ROWS; ++i)
+        {
+            char    name[SELECTOR_NAME_WIDTH + 1];
+            char    line[sizeof(name) + 2];
             u32     color;
 
             strncpy(name, g_pluginEntries[i], sizeof(name) - 1);
@@ -261,7 +274,7 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
 
             if (!g_pluginEntryOk[i])
                 color = COLOR_GRAY;
-            else if (havePinned && strcmp(name, pinned) == 0)
+            else if (havePinned && strcmp(g_pluginEntries[i], pinned) == 0)
                 color = COLOR_YELLOW;
             else
                 color = COLOR_WHITE;
@@ -270,6 +283,7 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
             Draw_DrawString(10, posY, color, line);
             posY += SPACING_Y;
         }
+        Draw_DrawScrollMarks(50, SELECTOR_ROWS, first, g_pluginEntryCount, g_cursorColor);
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -385,48 +399,106 @@ static const DestructiveKeyword g_destructiveKeywords[] =
 {
     { "boot9strap",   40 },
     { "boot.firm",    40 },
-    { "/private",     25 },
-    { "/cias",        20 },
-    { "/gm9",         20 },
-    { "/fbi",         20 },
+    { "private",      25 },
+    { "cias",         20 },
+    { "gm9",          20 },
+    { "fbi",          20 },
     { "Nintendo 3DS", 15 },
-    { "/DCIM",        10 },
-    { "/JKSV",        10 },
-    { "/Splashes",    10 },
+    { "DCIM",         10 },
+    { "JKSV",         10 },
+    { "Splashes",     10 },
 };
 #define DESTRUCTIVE_KEYWORD_COUNT (sizeof(g_destructiveKeywords) / sizeof(g_destructiveKeywords[0]))
+#define SCAN_BUFFER_SIZE    0x2000
+#define SCAN_CARRY_SIZE     32
+#define APPROVED_PATH       "/luma/plugins/.approved3gx"
 
 static char lowerAscii(char c)
 {
     return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
 }
 
-static s32 memstrCaseless(const char *hay, u32 hayLen, const char *needle, u32 needleLen)
+static bool     MatchPathKeyword(const u8 *buf, u32 len, u32 pos, const char *keyword, u32 unit, bool last)
 {
-    if (needleLen == 0 || hayLen < needleLen)
-        return -1;
-
-    for (u32 i = 0; i + needleLen <= hayLen; ++i)
+    for (u32 i = 0; keyword[i] != 0; ++i, pos += unit)
     {
-        u32 j = 0;
-
-        while (j < needleLen && lowerAscii(hay[i + j]) == lowerAscii(needle[j]))
-            ++j;
-
-        if (j == needleLen)
-            return (s32)i;
+        if (pos + unit > len || lowerAscii((char)buf[pos]) != lowerAscii(keyword[i]) || (unit == 2 && buf[pos + 1] != 0))
+            return false;
     }
 
-    return -1;
+    if (pos + unit > len)
+        return last;
+
+    return (buf[pos] == '/' || buf[pos] == '"' || buf[pos] == 0) && (unit == 1 || buf[pos + 1] == 0);
+}
+
+static void     ScanForKeywords(const u8 *buf, u32 len, u32 base, bool last, bool *found, u32 *offsets, u8 *units)
+{
+    for (u32 s = 0; s + 1 < len; ++s)
+    {
+        if (buf[s] != '/' && buf[s] != ':')
+            continue;
+
+        for (u32 unit = 1; unit <= 2; ++unit)
+        {
+            if (unit == 2 && buf[s + 1] != 0)
+                continue;
+
+            for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
+            {
+                if (!found[i] && MatchPathKeyword(buf, len, s + unit, g_destructiveKeywords[i].text, unit, last))
+                {
+                    found[i] = true;
+                    offsets[i] = base + s + unit;
+                    units[i] = (u8)unit;
+                }
+            }
+        }
+    }
 }
 
 #define APPROVED_CACHE_SIZE 32
 
 static u64      g_approvedHashes[APPROVED_CACHE_SIZE];
 static u32      g_approvedCount;
+static bool     g_approvedLoaded;
+
+static void     LoadApprovals(void)
+{
+    IFile   f;
+    u64     total = 0;
+
+    g_approvedLoaded = true;
+
+    if (R_SUCCEEDED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, APPROVED_PATH), FS_OPEN_READ)))
+    {
+        if (R_FAILED(IFile_Read(&f, &total, g_approvedHashes, sizeof(g_approvedHashes))))
+            total = 0;
+        IFile_Close(&f);
+    }
+
+    g_approvedCount = (u32)total / sizeof(u64);
+}
+
+static void     SaveApprovals(void)
+{
+    IFile   f;
+    u64     total;
+    u32     size = g_approvedCount * sizeof(u64);
+
+    if (R_SUCCEEDED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, APPROVED_PATH), FS_OPEN_CREATE | FS_OPEN_WRITE)))
+    {
+        IFile_Write(&f, &total, g_approvedHashes, size, FS_WRITE_FLUSH);
+        IFile_SetSize(&f, size);
+        IFile_Close(&f);
+    }
+}
 
 static bool     IsHashApproved(u64 hash)
 {
+    if (!g_approvedLoaded)
+        LoadApprovals();
+
     for (u32 i = 0; i < g_approvedCount; ++i)
         if (g_approvedHashes[i] == hash)
             return true;
@@ -440,20 +512,21 @@ static void     RememberApproval(u64 hash)
         return;
 
     if (g_approvedCount < APPROVED_CACHE_SIZE)
-    {
         g_approvedHashes[g_approvedCount++] = hash;
-        return;
+    else
+    {
+        for (u32 i = 1; i < APPROVED_CACHE_SIZE; ++i)
+            g_approvedHashes[i - 1] = g_approvedHashes[i];
+
+        g_approvedHashes[APPROVED_CACHE_SIZE - 1] = hash;
     }
 
-    for (u32 i = 1; i < APPROVED_CACHE_SIZE; ++i)
-        g_approvedHashes[i - 1] = g_approvedHashes[i];
-
-    g_approvedHashes[APPROVED_CACHE_SIZE - 1] = hash;
+    SaveApprovals();
 }
 
-static void     DrawMatchDetails(IFile *plugin, const bool *found, const u32 *offsets)
+static void     DrawMatchDetails(IFile *plugin, const bool *found, const u32 *offsets, const u8 *units)
 {
-    static char raw[32];
+    static char raw[48];
     char        text[25];
     u64         total;
     u32         posY = 30;
@@ -467,16 +540,17 @@ static void     DrawMatchDetails(IFile *plugin, const bool *found, const u32 *of
         if (!found[i])
             continue;
 
-        u32 base = offsets[i] > 8 ? offsets[i] - 8 : 0;
+        u32 back = 8 * units[i];
+        u32 base = offsets[i] > back ? offsets[i] - back : 0;
 
         plugin->pos = base;
-        if (R_SUCCEEDED(IFile_Read(plugin, &total, raw, 24)))
+        if (R_SUCCEEDED(IFile_Read(plugin, &total, raw, 24 * units[i])))
         {
-            u32 got = (u32)total > 24 ? 24 : (u32)total;
+            u32 got = (u32)total / units[i];
 
             for (n = 0; n < got; ++n)
             {
-                char c = raw[n];
+                char c = raw[n * units[i]];
                 text[n] = (c >= 0x20 && c < 0x7F) ? c : '.';
             }
         }
@@ -485,72 +559,66 @@ static void     DrawMatchDetails(IFile *plugin, const bool *found, const u32 *of
         posY = Draw_DrawFormattedString(10, posY, COLOR_WHITE, "%08lx %-12s %s\n",
                                         offsets[i], g_destructiveKeywords[i].text, text);
     }
-
-    plugin->pos = 0;
 }
 
-static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
+static bool     CheckForDestructivePlugin(IFile *plugin, const _3gx_Header *header, u64 fileSize)
 {
-    static char buffer[2000];
-    u64         offset = 0;
+    static u8   buffer[SCAN_BUFFER_SIZE];
+    const u32   ranges[3][2] =
+    {
+        { header->executable.codeOffset,   header->executable.codeSize },
+        { header->executable.rodataOffset, header->executable.rodataSize },
+        { header->executable.dataOffset,   header->executable.dataSize },
+    };
+    u64         savedPos = plugin->pos;
     u64         total;
     u64         hash = 0xCBF29CE484222325ULL;
-    u64         hashed = 0;
     bool        found[DESTRUCTIVE_KEYWORD_COUNT] = { false };
     u32         matchOffset[DESTRUCTIVE_KEYWORD_COUNT] = { 0 };
-    u32         keywordLen[DESTRUCTIVE_KEYWORD_COUNT];
+    u8          matchUnit[DESTRUCTIVE_KEYWORD_COUNT] = { 0 };
     bool        readFailed = false;
-    u32         maxLen = 1;
 
-    for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
+    for (u32 r = 0; r < sizeof(ranges) / sizeof(ranges[0]) && !readFailed; ++r)
     {
-        keywordLen[i] = (u32)strlen(g_destructiveKeywords[i].text);
-        if (keywordLen[i] > maxLen)
-            maxLen = keywordLen[i];
-    }
+        u32 offset = ranges[r][0];
+        u32 end = ranges[r][0] + ranges[r][1];
+        u32 carry = 0;
 
-    if (maxLen >= sizeof(buffer))
-        maxLen = sizeof(buffer) - 1;
-
-    while (offset < fileSize)
-    {
-        u32 chunk = (u32)((fileSize - offset) > sizeof(buffer) ? sizeof(buffer) : (fileSize - offset));
-
-        plugin->pos = offset;
-        if (R_FAILED(IFile_Read(plugin, &total, buffer, chunk)) || (u32)total != chunk)
-        {
+        if (end < offset || end > fileSize)
             readFailed = true;
-            break;
-        }
 
-        for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
+        while (!readFailed && offset < end)
         {
-            if (found[i])
-                continue;
+            u32 chunk = end - offset;
 
-            s32 at = memstrCaseless(buffer, chunk, g_destructiveKeywords[i].text, keywordLen[i]);
-            if (at >= 0)
+            if (chunk > sizeof(buffer) - carry)
+                chunk = sizeof(buffer) - carry;
+
+            plugin->pos = offset;
+            if (R_FAILED(IFile_Read(plugin, &total, buffer + carry, chunk)) || (u32)total != chunk)
             {
-                found[i] = true;
-                matchOffset[i] = (u32)(offset + (u32)at);
+                readFailed = true;
+                break;
             }
-        }
 
-        u32 fresh = (offset >= hashed) ? 0 : (u32)(hashed - offset);
-        for (u32 i = fresh; i < chunk; ++i)
-        {
-            hash ^= (u8)buffer[i];
-            hash *= 0x100000001B3ULL;
-        }
-        if (offset + chunk > hashed)
-            hashed = offset + chunk;
+            for (u32 i = 0; i < chunk; ++i)
+            {
+                hash ^= buffer[carry + i];
+                hash *= 0x100000001B3ULL;
+            }
 
-        offset += (chunk > maxLen && offset + chunk < fileSize)
-            ? chunk - (maxLen - 1) : chunk;
+            u32 len = carry + chunk;
+
+            offset += chunk;
+            ScanForKeywords(buffer, len, offset - len, offset == end, found, matchOffset, matchUnit);
+
+            carry = len < SCAN_CARRY_SIZE ? len : SCAN_CARRY_SIZE;
+            for (u32 i = 0; i < carry; ++i)
+                buffer[i] = buffer[len - carry + i];
+        }
     }
 
-    plugin->pos = 0;
-    g_pluginHash = hash;
+    plugin->pos = savedPos;
 
     u32 risk = 0;
     for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
@@ -602,7 +670,7 @@ static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
 
         if (details)
         {
-            DrawMatchDetails(plugin, found, matchOffset);
+            DrawMatchDetails(plugin, found, matchOffset, matchUnit);
             Draw_DrawString(10, 205, COLOR_WHITE, Lang(STR_X_BACK_TO_THE_WARNING));
         }
         else
@@ -637,6 +705,7 @@ static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
     if (result && !readFailed)
         RememberApproval(hash);
 
+    plugin->pos = savedPos;
     menuLeave();
     return result;
 }
@@ -734,12 +803,6 @@ bool     TryToLoadPlugin(Handle process, bool isHomebrew)
     if (R_FAILED((res = IFile_GetSize(&plugin, &fileSize))))
         ctx->error.message = "Couldn't get file size";
 
-    if (!res && !CheckForDestructivePlugin(&plugin, fileSize))
-    {
-        IFile_Close(&plugin);
-        return false;
-    }
-
     if (!res && R_FAILED(res = Check_3gx_Magic(&plugin)))
     {
         const char * errors[] = 
@@ -768,6 +831,12 @@ bool     TryToLoadPlugin(Handle process, bool isHomebrew)
         
         ctx->error.message = NULL;
         res = -1;
+    }
+
+    if (!res && !CheckForDestructivePlugin(&plugin, &fileHeader, fileSize))
+    {
+        IFile_Close(&plugin);
+        return false;
     }
 
     

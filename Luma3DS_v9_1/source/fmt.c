@@ -263,6 +263,7 @@ u32 vsprintf(char *buf, const char *fmt, va_list args)
             
             case 'X':
                 flags |= UPPERCASE;
+                __attribute__((fallthrough));
                 
             case 'x':
                 isHex = true;
@@ -271,6 +272,7 @@ u32 vsprintf(char *buf, const char *fmt, va_list args)
             case 'd':
             case 'i':
                 flags |= SIGN;
+                __attribute__((fallthrough));
                 
             case 'u':
                 isHex = false;

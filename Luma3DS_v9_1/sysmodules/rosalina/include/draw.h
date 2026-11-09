@@ -61,6 +61,8 @@ extern u16 g_menuBgColor;
 #define SPACING_Y 11
 #define SPACING_X 6
 
+#define SCROLL_MARK_X (SCREEN_BOT_WIDTH - 16)
+
 #define COLOR_TITLE RGB565(0x00, 0x26, 0x1F)
 #define COLOR_WHITE RGB565(0x1F, 0x3F, 0x1F)
 #define COLOR_RED   RGB565(0x1F, 0x00, 0x00)
@@ -78,6 +80,7 @@ void Draw_DrawCharacter(u32 posX, u32 posY, u32 color, char character);
 u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string);
 u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...);
 u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *romaji, const char *english);
+void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color);
 
 void Draw_FillFramebuffer(u32 value);
 void Draw_ClearFramebuffer(void);

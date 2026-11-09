@@ -317,6 +317,8 @@ void loadHomebrewFirm(u32 pressed)
 
 #define OTHER_FIRM_ARGV_PATH "sdmc:/3ds/luma/9.1/boot.firm"
 #define BOOT_FIRM_PATH       "sdmc:/boot.firm"
+#define BOOT_FIRM_TMP_PATH   "sdmc:/boot.firm.tmp"
+#define BOOT_FIRM_BAK_PATH   "sdmc:/boot.firm.bak"
 
 bool loadVersionFirm(const char *target)
 {
@@ -334,7 +336,19 @@ bool loadVersionFirm(const char *target)
 
     if(payloadSize <= 0x200 || !checkFirm(payloadSize)) return false;
 
-    fileWrite(firm, BOOT_FIRM_PATH, payloadSize);
+    u8 *check = (u8 *)firm + ((payloadSize + 0xFFF) & ~0xFFF);
+
+    if(payloadSize <= maxPayloadSize / 2 && fileWrite(firm, BOOT_FIRM_TMP_PATH, payloadSize) &&
+       fileRead(check, BOOT_FIRM_TMP_PATH, payloadSize) == payloadSize && memcmp(check, firm, payloadSize) == 0)
+    {
+        fileDelete(BOOT_FIRM_BAK_PATH);
+        if(fileRename(BOOT_FIRM_PATH, BOOT_FIRM_BAK_PATH))
+        {
+            if(fileRename(BOOT_FIRM_TMP_PATH, BOOT_FIRM_PATH)) fileDelete(BOOT_FIRM_BAK_PATH);
+            else fileRename(BOOT_FIRM_BAK_PATH, BOOT_FIRM_PATH);
+        }
+    }
+    fileDelete(BOOT_FIRM_TMP_PATH);
 
     char *argv[2] = {(char *)OTHER_FIRM_ARGV_PATH, (char *)fbs};
 

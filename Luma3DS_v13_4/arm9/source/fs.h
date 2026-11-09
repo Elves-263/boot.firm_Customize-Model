@@ -38,6 +38,7 @@ u32 fileRead(void *dest, const char *path, u32 maxSize);
 u32 getFileSize(const char *path);
 bool fileWrite(const void *buffer, const char *path, u32 size);
 bool fileDelete(const char *path);
+bool fileRename(const char *oldPath, const char *newPath);
 bool fileCopy(const char *pathSrc, const char *pathDst, bool replace, void *tmpBuffer, size_t bufferSize);
 bool createDir(const char *path);
 bool findPayload(char *path, u32 pressed);

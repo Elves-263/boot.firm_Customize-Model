@@ -259,30 +259,12 @@ void loadHomebrewFirm(u32 pressed)
     launchFirm((firm->reserved2[0] & 1) ? 2 : 1, argv);
 }
 
-bool loadAltBootFirm(void)
-{
-    if(!isSdMode) return false;
-
-    const char *path = "/3ds/boot/boot.firm";
-
-    u32 maxPayloadSize = (u32)((u8 *)0x27FFE000 - (u8 *)firm),
-        payloadSize = fileRead(firm, path, maxPayloadSize);
-
-    if(payloadSize <= 0x200 || !checkFirm(payloadSize)) return false;
-
-    char *argv[2] = {(char *)"sdmc:/3ds/boot/boot.firm", (char *)fbs};
-
-    initScreens();
-
-    launchFirm((firm->reserved2[0] & 1) ? 2 : 1, argv);
-
-    return true;
-}
-
 
 #define OTHER_FIRM_READ_PATH "/3ds/luma/13.4/boot.firm"
 #define OTHER_FIRM_ARGV_PATH "sdmc:/3ds/luma/13.4/boot.firm"
 #define BOOT_FIRM_PATH       "/boot.firm"
+#define BOOT_FIRM_TMP_PATH   "/boot.firm.tmp"
+#define BOOT_FIRM_BAK_PATH   "/boot.firm.bak"
 
 bool loadVersionFirm(const char *target)
 {
@@ -300,7 +282,19 @@ bool loadVersionFirm(const char *target)
 
     if(payloadSize <= 0x200 || !checkFirm(payloadSize)) return false;
 
-    fileWrite(firm, BOOT_FIRM_PATH, payloadSize);
+    u8 *check = (u8 *)firm + ((payloadSize + 0xFFF) & ~0xFFF);
+
+    if(payloadSize <= maxPayloadSize / 2 && fileWrite(firm, BOOT_FIRM_TMP_PATH, payloadSize) &&
+       fileRead(check, BOOT_FIRM_TMP_PATH, payloadSize) == payloadSize && memcmp(check, firm, payloadSize) == 0)
+    {
+        fileDelete(BOOT_FIRM_BAK_PATH);
+        if(fileRename(BOOT_FIRM_PATH, BOOT_FIRM_BAK_PATH))
+        {
+            if(fileRename(BOOT_FIRM_TMP_PATH, BOOT_FIRM_PATH)) fileDelete(BOOT_FIRM_BAK_PATH);
+            else fileRename(BOOT_FIRM_BAK_PATH, BOOT_FIRM_PATH);
+        }
+    }
+    fileDelete(BOOT_FIRM_TMP_PATH);
 
     char *argv[2] = {(char *)OTHER_FIRM_ARGV_PATH, (char *)fbs};
 

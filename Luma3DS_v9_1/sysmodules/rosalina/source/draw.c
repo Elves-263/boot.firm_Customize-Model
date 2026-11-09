@@ -120,6 +120,14 @@ u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *romaji, const 
     return posY;
 }
 
+void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color)
+{
+    if (first > 0)
+        Draw_DrawCharacter(SCROLL_MARK_X, posY, color, '\x1E');
+    if (first + rows < total)
+        Draw_DrawCharacter(SCROLL_MARK_X, posY + (rows - 1) * SPACING_Y, color, '\x1F');
+}
+
 void Draw_FillFramebuffer(u32 value)
 {
     memset32(FB_BOTTOM_VRAM_ADDR, value, FB_BOTTOM_SIZE);

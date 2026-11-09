@@ -63,6 +63,25 @@ static u32  g_transfers;
 
 // ---------------------------------------------------------------- utilities
 
+static bool ftpdWait(int sock, int events)
+{
+    struct pollfd pfd;
+
+    pfd.fd = sock;
+    pfd.events = events;
+
+    while (ftpdEnabled)
+    {
+        pfd.revents = 0;
+
+        int pr = socPoll(&pfd, 1, 500);
+        if (pr != 0)
+            return pr > 0;
+    }
+
+    return false;
+}
+
 static void ftpdSendString(int sock, const char *s)
 {
     u32 len = 0;
@@ -72,6 +91,9 @@ static void ftpdSendString(int sock, const char *s)
     u32 sent = 0;
     while (sent < len)
     {
+        if (!ftpdWait(sock, POLLOUT))
+            return;
+
         ssize_t n = socSend(sock, s + sent, len - sent, 0);
         if (n <= 0)
             return;
@@ -339,7 +361,7 @@ static void ftpdCmdList(int ctrl, const char *arg, bool namesOnly)
 
         char name[256];
         int units = utf16_to_utf8((u8 *)name, entry.name, sizeof(name) - 1);
-        if (units < 0)
+        if (units < 0 || (u32)units >= sizeof(name))
             continue;
         name[units] = 0;
 
@@ -403,7 +425,9 @@ static void ftpdCmdRetr(int ctrl, const char *arg)
         u32 sent = 0;
         while (sent < (u32)read)
         {
-            ssize_t w = socSend(g_dataSock, g_xfer + sent, (u32)read - sent, 0);
+            ssize_t w = -1;
+            if (ftpdWait(g_dataSock, POLLOUT))
+                w = socSend(g_dataSock, g_xfer + sent, (u32)read - sent, 0);
             if (w <= 0)
             {
                 ok = false;
@@ -471,7 +495,9 @@ static void ftpdCmdStor(int ctrl, const char *arg, bool append)
 
     for (;;)
     {
-        ssize_t n = socRecv(g_dataSock, g_xfer, sizeof(g_xfer), 0);
+        ssize_t n = -1;
+        if (ftpdWait(g_dataSock, POLLIN))
+            n = socRecv(g_dataSock, g_xfer, sizeof(g_xfer), 0);
         if (n == 0)
             break;
         if (n < 0)
@@ -943,7 +969,7 @@ void RosalinaMenu_Ftpd(void)
             {
                 Ftpd_Disable(5 * 1000 * 1000 * 1000LL);
             }
-            else
+            else if (ftpdThread.handle == 0 || R_SUCCEEDED(MyThread_Join(&ftpdThread, 0)))
             {
                 ftpdEnabled = true;
                 ftpdCreateThread();

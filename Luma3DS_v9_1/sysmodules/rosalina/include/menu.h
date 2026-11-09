@@ -28,6 +28,7 @@
 
 #define FORK_LUMA_VERSION  "9.1"
 #define FORK_OTHER_VERSION "13.4"
+#define FORK_PACKAGE_TAG   "v1.3"
 
 extern u32 g_accentColor;
 extern u32 g_textColor;
@@ -36,6 +37,8 @@ void AccentColor_EnsureLoaded(void);
 void LogLine(const char *msg);
 void SDSpaceWarnIfLow(void);
 extern bool g_safeMode;
+#define MENU_WORK_BUF_SIZE 0x10000
+extern u8 g_menuWorkBuf[MENU_WORK_BUF_SIZE];
 
 #include <3ds/types.h>
 #include "MyThread.h"

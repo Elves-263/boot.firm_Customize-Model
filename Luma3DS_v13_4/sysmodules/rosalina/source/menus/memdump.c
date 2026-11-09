@@ -32,11 +32,13 @@
 #include "fmt.h"
 #include "ifile.h"
 #include "memory.h"
+#include "csvc.h"
 
 #define MD_MAX_PROCESSES    0x40
 #define MD_MAX_REGIONS      64
-#define MD_CHUNK            0x10000
+#define MD_CHUNK            MENU_WORK_BUF_SIZE
 #define MD_DUMP_DIR         "/luma/dumps"
+#define MD_MAP_ADDR         0x00100000
 
 typedef struct MdProcess {
     u32  pid;
@@ -56,8 +58,6 @@ static u32       g_procCount;
 
 static MdRegion  g_regions[MD_MAX_REGIONS];
 static u32       g_regionCount;
-
-static u8        g_chunk[MD_CHUNK];
 
 static u32 MemDump_ListProcesses(void)
 {
@@ -152,13 +152,23 @@ static void MemDump_DeleteFile(const char *path)
     }
 }
 
-static Result MemDump_WriteRegion(Handle processHandle, const MdRegion *r, const char *path, u32 *outWritten)
+static void MemDump_DrawWritten(u64 bytes)
+{
+    Draw_Lock();
+    Draw_DrawFormattedString(10, 4 + 7 * SPACING_Y, COLOR_WHITE, Lang(STR_WRITTEN_KB), (u32)(bytes >> 10));
+    Draw_FlushFramebuffer();
+    Draw_Unlock();
+}
+
+static Result MemDump_WriteRegion(Handle processHandle, const MdRegion *r, const char *path, u64 doneBefore,
+                                  u32 *outWritten, bool *cancelled)
 {
     IFile file;
     Result res;
     u64 written = 0;
 
     *outWritten = 0;
+    *cancelled = false;
 
     MemDump_DeleteFile(path);
 
@@ -175,14 +185,24 @@ static Result MemDump_WriteRegion(Handle processHandle, const MdRegion *r, const
         if (n > MD_CHUNK)
             n = MD_CHUNK;
 
-        if (R_FAILED(svcReadProcessMemory(g_chunk, processHandle, r->base + off, n)))
+        if (R_FAILED(svcMapProcessMemoryEx(CUR_PROCESS_HANDLE, MD_MAP_ADDR, processHandle, r->base + off, n, 0)))
             break;
 
-        res = IFile_Write(&file, &written, g_chunk, n, FS_WRITE_FLUSH);
+        memcpy(g_menuWorkBuf, (const void *)MD_MAP_ADDR, n);
+        svcUnmapProcessMemoryEx(CUR_PROCESS_HANDLE, MD_MAP_ADDR, n);
+
+        res = IFile_Write(&file, &written, g_menuWorkBuf, n, FS_WRITE_FLUSH);
         if (R_FAILED(res))
             break;
 
         *outWritten += n;
+        MemDump_DrawWritten(doneBefore + *outWritten);
+
+        if (HID_PAD & KEY_B)
+        {
+            *cancelled = true;
+            break;
+        }
     }
 
     IFile_Close(&file);
@@ -234,6 +254,7 @@ static void MemDump_Run(const MdProcess *p, bool codeOnly)
     char path[192];
     u32 dumped = 0;
     u64 totalBytes = 0;
+    bool cancelled = false;
 
     Draw_Lock();
     Draw_ClearFramebuffer();
@@ -274,11 +295,11 @@ static void MemDump_Run(const MdProcess *p, bool codeOnly)
         FSUSER_CloseArchive(archive);
     }
 
-    for (u32 i = 0; i < g_regionCount; ++i)
+    for (u32 i = 0; i < g_regionCount && !cancelled; ++i)
     {
         const MdRegion *r = &g_regions[i];
 
-        if (codeOnly && (r->perm & MEMPERM_EXECUTE) == 0)
+        if ((codeOnly && (r->perm & MEMPERM_EXECUTE) == 0) || r->state == MEMSTATE_IO)
             continue;
 
         Draw_Lock();
@@ -288,20 +309,21 @@ static void MemDump_Run(const MdProcess *p, bool codeOnly)
         Draw_DrawFormattedString(10, 4 + 4 * SPACING_Y, COLOR_WHITE, Lang(STR_REGION), i + 1, g_regionCount);
         Draw_DrawFormattedString(10, 4 + 5 * SPACING_Y, COLOR_WHITE, "%08lx  %lu KB   ",
                                  r->base, r->size >> 10);
-        Draw_DrawFormattedString(10, 4 + 7 * SPACING_Y, COLOR_WHITE, Lang(STR_WRITTEN_KB),
-                                 (u32)(totalBytes >> 10));
+        Draw_DrawString(10, 220, COLOR_WHITE, "B: cancel");
         Draw_FlushFramebuffer();
         Draw_Unlock();
+        MemDump_DrawWritten(totalBytes);
 
         u32 written = 0;
         sprintf(path, "%s/%08lx_%08lx.bin", dir, r->base, r->size);
 
-        if (R_SUCCEEDED(MemDump_WriteRegion(processHandle, r, path, &written)) && written != 0)
+        if (R_SUCCEEDED(MemDump_WriteRegion(processHandle, r, path, totalBytes, &written, &cancelled))
+            && written != 0 && !cancelled)
         {
             ++dumped;
             totalBytes += written;
         }
-        else if (written == 0)
+        else if (written == 0 || cancelled)
         {
             MemDump_DeleteFile(path);
         }
@@ -312,10 +334,14 @@ static void MemDump_Run(const MdProcess *p, bool codeOnly)
 
     svcCloseHandle(processHandle);
 
+    while (cancelled && (HID_PAD & KEY_B))
+        svcSleepThread(10 * 1000 * 1000LL);
+
     Draw_Lock();
     Draw_ClearFramebuffer();
     Draw_DrawString(10, 4, COLOR_TITLE, "Memory dump");
-    Draw_DrawFormattedString(10, 4 + 3 * SPACING_Y, COLOR_LIME, Lang(STR_DONE_REGIONS_KB),
+    Draw_DrawFormattedString(10, 4 + 3 * SPACING_Y, cancelled ? COLOR_RED : COLOR_LIME,
+                             Lang(cancelled ? STR_CANCELLED_REGIONS_KB : STR_DONE_REGIONS_KB),
                              dumped, (u32)(totalBytes >> 10));
     Draw_DrawFormattedString(10, 4 + 5 * SPACING_Y, COLOR_WHITE, "%s", dir);
     Draw_DrawString(10, 4 + 7 * SPACING_Y, COLOR_WHITE, Lang(STR_MAP_TXT_LISTS_EVERY_REGION));
@@ -332,7 +358,6 @@ void RosalinaMenu_MemoryDump(void)
 
     MemDump_ListProcesses();
 
-    menuEnter();
 
     do
     {
@@ -360,6 +385,7 @@ void RosalinaMenu_MemoryDump(void)
                                      g_procs[idx].name, g_procs[idx].titleId);
             y += SPACING_Y;
         }
+        Draw_DrawScrollMarks(4 + 2 * SPACING_Y, rows, scroll, total, g_cursorColor);
 
         if (total == 0)
             Draw_DrawBilingual(10, y, COLOR_RED, "Process ga arimasen", "No processes");
@@ -384,5 +410,4 @@ void RosalinaMenu_MemoryDump(void)
     }
     while (!menuShouldExit);
 
-    menuLeave();
 }

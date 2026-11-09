@@ -44,10 +44,11 @@
 #include "ifile.h"
 #include "memory.h"
 #include "fmt.h"
+#include "sha256.h"
 
 Menu rosalinaMenu = {
     "Rosalina menu",
-    .nbItems = 22,
+    .nbItems = 20,
     {
         { "New 3DS menu...", MENU, .menu = &N3DSMenu },
         { "Cheats...", METHOD, .method = &RosalinaMenu_Cheats },
@@ -60,10 +61,8 @@ Menu rosalinaMenu = {
         { "Colors...", METHOD, .method = &RosalinaMenu_AccentColor },
         { "Language / Gengo", METHOD, .method = &RosalinaMenu_Language },
         { "3gx / txt checker", METHOD, .method = &RosalinaMenu_3gxTxtChecker },
-        { "Self test", METHOD, .method = &RosalinaMenu_SelfTest },
-        { "Restore settings", METHOD, .method = &RosalinaMenu_RestoreSettings },
+        { "Check SD Card", METHOD, .method = &RosalinaMenu_CheckSdCard },
         { "File browser", METHOD, .method = &RosalinaMenu_FileBrowser },
-        { "Chainload SD:/3ds/boot/boot.firm", METHOD, .method = &RosalinaMenu_ChainloadAltFirm },
         { "Switch version (v9.1/v13.4)", METHOD, .method = &RosalinaMenu_ChainloadVersionToggle },
         { "Power off", METHOD, .method = &RosalinaMenu_PowerOff },
         { "Reboot", METHOD, .method = &RosalinaMenu_Reboot },
@@ -111,42 +110,27 @@ void RosalinaMenu_ShowCredits(void)
     while(!(waitInput() & BUTTON_B) && !terminationRequest);
 }
 
-void RosalinaMenu_ChainloadAltFirm(void)
+static bool firmFileValid(const char *path)
 {
-    Draw_Lock();
-    Draw_ClearFramebuffer();
-    Draw_FlushFramebuffer();
-    Draw_Unlock();
+    IFile f;
+    u64 size = 0;
 
-    do
-    {
-        Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Rosalina menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "A: chainload SD:/3ds/boot/boot.firm   B: go back");
-        Draw_FlushFramebuffer();
-        Draw_Unlock();
+    if(R_FAILED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
+                           fsMakePath(PATH_ASCII, path), FS_OPEN_READ)))
+        return false;
 
-        u32 pressed = waitInputWithTimeout(1000);
+    IFile_GetSize(&f, &size);
 
-        if(pressed & BUTTON_A)
-        {
-            IFile   f;
-            u64     total;
+    
+    u64 total = 0;
+    char magic[4] = {0};
+    bool ok = size > 0x200
+              && R_SUCCEEDED(IFile_Read(&f, &total, magic, sizeof(magic)))
+              && total == sizeof(magic)
+              && memcmp(magic, "FIRM", 4) == 0;
 
-            if (R_SUCCEEDED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, "/luma/chainload_alt.flag"), FS_OPEN_CREATE | FS_OPEN_WRITE)))
-            {
-                IFile_Write(&f, &total, (void *)"1", 1, FS_WRITE_FLUSH);
-                IFile_Close(&f);
-            }
-
-            menuLeave();
-            APT_HardwareResetAsync();
-            return;
-        }
-        else if(pressed & BUTTON_B)
-            return;
-    }
-    while(!terminationRequest);
+    IFile_Close(&f);
+    return ok;
 }
 
 
@@ -180,30 +164,12 @@ static bool chainloadVersionFlagSet(const char *version)
     return ok;
 }
 
-static bool chainloadVersionFirmExists(const char *version)
+bool chainloadVersionFirmExists(const char *version)
 {
-    IFile f;
-    u64 size = 0;
     char path[40];
 
     sprintf(path, "/3ds/luma/%s/boot.firm", version);
-
-    if(R_FAILED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
-                           fsMakePath(PATH_ASCII, path), FS_OPEN_READ)))
-        return false;
-
-    IFile_GetSize(&f, &size);
-
-    
-    u64 total = 0;
-    char magic[4] = {0};
-    bool ok = size > 0x200
-              && R_SUCCEEDED(IFile_Read(&f, &total, magic, sizeof(magic)))
-              && total == sizeof(magic)
-              && memcmp(magic, "FIRM", 4) == 0;
-
-    IFile_Close(&f);
-    return ok;
+    return firmFileValid(path);
 }
 
 
@@ -336,6 +302,7 @@ void RosalinaMenu_PowerOff(void)
         {
             menuLeave();
             srvPublishToSubscriber(0x203, 0);
+            return;
         }
         else if(pressed & BUTTON_B)
             return;
@@ -506,7 +473,6 @@ static bool g_colorsLoaded = false;
 
 #define COLORS_PATH "/luma/colors.cfg"
 
-static void Backup_Snapshot(void);
 
 #define HUE_X 10
 #define HUE_Y 35
@@ -699,8 +665,6 @@ static void ColorsSave(void)
         (unsigned)g_colH[3], (unsigned)g_colS[3], (unsigned)g_colV[3]);
     IFile_Write(&f, &total, buf, len, FS_WRITE_FLUSH);
     IFile_Close(&f);
-
-    Backup_Snapshot();
 }
 
 void RosalinaMenu_AccentColor(void)
@@ -804,7 +768,7 @@ static bool Checker_HasPlugin(u64 tid, char *outName, u32 outSize)
     {
         u32                 n = 0;
         FS_DirectoryEntry   entry;
-        static const u16    ext[] = u"3gx";
+        static const u16    ext[] = u".3gx";
 
         while (!found && R_SUCCEEDED(FSDIR_Read(dir, &n, 1, &entry)) && n > 0)
         {
@@ -814,17 +778,15 @@ static bool Checker_HasPlugin(u64 tid, char *outName, u32 outSize)
             u32 len = 0;
             while (entry.name[len])
                 ++len;
-            if (len <= 4)
+            if (len <= 4 || entry.name[0] == u'.')
                 continue;
 
-            if (memcmp(entry.name + len - 3, ext, 3 * sizeof(u16)) == 0)
+            if (memcmp(entry.name + len - 4, ext, 4 * sizeof(u16)) == 0)
             {
                 if (outName && outSize > 0)
                 {
-                    int units = utf16_to_utf8((u8 *)outName, entry.name, outSize - 1);
-                    if (units < 0)
-                        units = 0;
-                    outName[units] = 0;
+                    memset(outName, 0, outSize);
+                    utf16_to_utf8((u8 *)outName, entry.name, outSize - 1);
                 }
                 found = true;
             }
@@ -1052,48 +1014,6 @@ static bool PathExists(const char *path, bool dir)
     return false;
 }
 
-static bool BackupCopy(const char *src, const char *dst)
-{
-    IFile in;
-    char  buf[512];
-    u64   rd = 0;
-
-    if (R_FAILED(IFile_Open(&in, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
-                            fsMakePath(PATH_ASCII, src), FS_OPEN_READ)))
-        return false;
-
-    Result r = IFile_Read(&in, &rd, buf, sizeof(buf));
-    IFile_Close(&in);
-    if (R_FAILED(r))
-        return false;
-
-    SdmcDeleteFile(dst);
-
-    IFile out;
-    if (R_FAILED(IFile_Open(&out, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
-                            fsMakePath(PATH_ASCII, dst), FS_OPEN_CREATE | FS_OPEN_WRITE)))
-        return false;
-
-    u64 wr = 0;
-    IFile_Write(&out, &wr, buf, (u32)rd, FS_WRITE_FLUSH);
-    IFile_Close(&out);
-    return true;
-}
-
-static void Backup_Snapshot(void)
-{
-    FS_Archive a = 0;
-    if (R_SUCCEEDED(FSUSER_OpenArchive(&a, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""))))
-    {
-        FSUSER_CreateDirectory(a, fsMakePath(PATH_ASCII, "/luma/backup"), 0);
-        FSUSER_CloseArchive(a);
-    }
-
-    BackupCopy("/luma/backup/colors1.cfg", "/luma/backup/colors2.cfg");
-    BackupCopy("/luma/backup/colors0.cfg", "/luma/backup/colors1.cfg");
-    BackupCopy(COLORS_PATH, "/luma/backup/colors0.cfg");
-}
-
 void SDSpaceWarnIfLow(void)
 {
     static bool warned = false;
@@ -1124,31 +1044,104 @@ void SDSpaceWarnIfLow(void)
     menuLeave();
 }
 
-void RosalinaMenu_SelfTest(void)
+static u32 CheckSdCard_Firm(const char *path, u8 *header)
+{
+    IFile   f;
+    u64     size = 0, total = 0;
+    u32     status = 2;
+
+    if (R_FAILED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
+                            fsMakePath(PATH_ASCII, path), FS_OPEN_READ)))
+        return 0;
+
+    IFile_GetSize(&f, &size);
+    if (size > 0x200 && R_SUCCEEDED(IFile_Read(&f, &total, header, 0x200)) && total == 0x200
+        && memcmp(header, "FIRM", 4) == 0)
+    {
+        status = 1;
+
+        for (u32 i = 0; i < 4 && status == 1; ++i)
+        {
+            const u8 *section = header + 0x40 + i * 0x30;
+            u32     offset, length;
+            u8      digest[32];
+            Sha256  ctx;
+
+            memcpy(&offset, section, 4);
+            memcpy(&length, section + 8, 4);
+            if (length == 0)
+                continue;
+
+            if (offset < 0x200 || offset + length < offset || offset + length > size)
+            {
+                status = 2;
+                break;
+            }
+
+            Sha256_Init(&ctx);
+            f.pos = offset;
+            while (length != 0 && status == 1)
+            {
+                u32 n = length < MENU_WORK_BUF_SIZE ? length : MENU_WORK_BUF_SIZE;
+
+                if (R_FAILED(IFile_Read(&f, &total, g_menuWorkBuf, n)) || total != n)
+                    status = 2;
+                else
+                    Sha256_Update(&ctx, g_menuWorkBuf, n);
+                length -= n;
+            }
+
+            Sha256_Final(&ctx, digest);
+            if (status == 1 && memcmp(digest, section + 0x10, 32) != 0)
+                status = 2;
+        }
+    }
+
+    IFile_Close(&f);
+    return status;
+}
+
+void RosalinaMenu_CheckSdCard(void)
 {
     static const char *const paths[] = {
         "/luma", "/luma/plugins", "/3ds/luma/9.1/boot.firm", "/3ds/luma/13.4/boot.firm", "/boot.firm"
     };
-    static const bool isDir[] = { true, true, false, false, false };
-    bool ok[5];
+    static const char *const marks[] = { "--", "OK", "NG" };
+    static u8 headers[3][0x200];
+    const char *active = "";
+    u32 status[5];
 
-    for (u32 i = 0; i < 5; ++i)
-        ok[i] = PathExists(paths[i], isDir[i]);
+    menuEnter();
+    Draw_Lock();
+    Draw_ClearFramebuffer();
+    Draw_DrawString(10, 10, COLOR_TITLE, "Check SD Card");
+    Draw_DrawString(10, 34, COLOR_WHITE, Lang(STR_CHECKING_FILES));
+    Draw_FlushFramebuffer();
+    Draw_Unlock();
+
+    for (u32 i = 0; i < 2; ++i)
+        status[i] = PathExists(paths[i], true) ? 1 : 0;
+    for (u32 i = 2; i < 5; ++i)
+        status[i] = CheckSdCard_Firm(paths[i], headers[i - 2]);
+
+    if (status[4] == 1 && status[2] == 1 && memcmp(headers[2], headers[0], 0x200) == 0)
+        active = " (v9.1)";
+    else if (status[4] == 1 && status[3] == 1 && memcmp(headers[2], headers[1], 0x200) == 0)
+        active = " (v13.4)";
 
     u64 freeBytes = SD_FreeBytes();
 
-    menuEnter();
     do
     {
         Draw_Lock();
         Draw_ClearFramebuffer();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Self test");
+        Draw_DrawString(10, 10, COLOR_TITLE, "Check SD Card");
 
         u32 y = 34;
         for (u32 i = 0; i < 5; ++i)
         {
-            Draw_DrawFormattedString(10, y, ok[i] ? COLOR_LIME : COLOR_RED, "[%s] %s",
-                ok[i] ? "OK" : "--", paths[i]);
+            Draw_DrawFormattedString(10, y, status[i] == 1 ? COLOR_LIME : COLOR_RED, "[%s] %s%s",
+                marks[status[i]], paths[i], i == 4 ? active : "");
             y += SPACING_Y;
         }
         y += 4;
@@ -1156,6 +1149,7 @@ void RosalinaMenu_SelfTest(void)
             Draw_DrawString(10, y, COLOR_WHITE, Lang(STR_SD_FREE_N_A));
         else
             Draw_DrawFormattedString(10, y, COLOR_WHITE, Lang(STR_SD_FREE_MB), (unsigned)(freeBytes >> 20));
+        Draw_DrawString(10, y + 2 * SPACING_Y, COLOR_WHITE, Lang(STR_SD_CHECK_LEGEND));
 
         Draw_DrawString(10, 220, COLOR_WHITE, "B: back");
         Draw_FlushFramebuffer();
@@ -1165,62 +1159,8 @@ void RosalinaMenu_SelfTest(void)
     menuLeave();
 }
 
-void RosalinaMenu_RestoreSettings(void)
-{
-    s32  sel = 0;
-    s32  status = 0;
-
-    menuEnter();
-    do
-    {
-        Draw_Lock();
-        Draw_ClearFramebuffer();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Restore settings");
-        Draw_DrawString(10, 34, COLOR_WHITE, Lang(STR_RESTORE_A_SAVED_COLOUR_BACKUP));
-
-        for (s32 i = 0; i < 3; ++i)
-            Draw_DrawFormattedString(20, 58 + i * SPACING_Y, i == sel ? COLOR_LIME : COLOR_WHITE,
-                "%s backup %d%s", i == sel ? ">" : " ", (int)i, i == 0 ? " (newest)" : "");
-
-        if (status == 1)
-            Draw_DrawString(10, 58 + 4 * SPACING_Y, COLOR_LIME, Lang(STR_RESTORED_COLOURS_RELOADED));
-        else if (status == 2)
-            Draw_DrawString(10, 58 + 4 * SPACING_Y, COLOR_RED, Lang(STR_THAT_BACKUP_WAS_NOT_FOUND));
-
-        Draw_DrawString(10, 210, COLOR_WHITE, Lang(STR_A_RESTORE_B_BACK));
-        Draw_FlushFramebuffer();
-        Draw_Unlock();
-
-        u32 k = waitInput();
-        if (terminationRequest)
-            break;
-
-        if (k & BUTTON_DOWN)
-            sel = (sel + 1) % 3;
-        else if (k & BUTTON_UP)
-            sel = (sel + 2) % 3;
-        else if (k & BUTTON_A)
-        {
-            char src[64];
-            sprintf(src, "/luma/backup/colors%d.cfg", (int)sel);
-            if (BackupCopy(src, COLORS_PATH))
-            {
-                g_colorsLoaded = false;
-                AccentColor_EnsureLoaded();
-                status = 1;
-                LogLine("[設定をバックアップから復元しました] / [settings restored from backup]");
-            }
-            else
-                status = 2;
-        }
-        else if (k & BUTTON_B)
-            break;
-    }
-    while (!terminationRequest);
-    menuLeave();
-}
-
 #define FB_MAX 256
+#define FB_NAME_COLS ((SCROLL_MARK_X - 10) / SPACING_X - 3)
 static char               g_fbName[FB_MAX][64];
 static bool               g_fbDir[FB_MAX];
 static u64                g_fbSize[FB_MAX];
@@ -1249,9 +1189,9 @@ static u32 FileBrowser_Load(const char *path)
                     if ((int)isDir != wantDir)
                         continue;
 
-                    int units = utf16_to_utf8((u8 *)g_fbName[count], g_fbEntries[i].name, 63);
-                    if (units < 0)
-                        units = 0;
+                    int units = utf16_to_utf8((u8 *)g_fbName[count], g_fbEntries[i].name, sizeof(g_fbName[0]) - 1);
+                    if (units < 0 || (u32)units >= sizeof(g_fbName[0]))
+                        continue;
                     g_fbName[count][units] = 0;
                     g_fbDir[count] = isDir;
                     g_fbSize[count] = g_fbEntries[i].fileSize;
@@ -1275,9 +1215,7 @@ static char g_fbClipPath[512];
 static bool g_fbClipIsDir;
 static u32  g_fbClipMode;
 
-static u8   g_fbCopyBuf[0x8000];
-
-static void FileBrowser_Join(char *dst, u32 dstSize, const char *dir, const char *name)
+static bool FileBrowser_Join(char *dst, u32 dstSize, const char *dir, const char *name)
 {
     u32 i = 0, j = 0;
 
@@ -1295,6 +1233,7 @@ static void FileBrowser_Join(char *dst, u32 dstSize, const char *dir, const char
         dst[i++] = name[j++];
 
     dst[i] = 0;
+    return name[j] == 0;
 }
 
 static const char *FileBrowser_BaseName(const char *path)
@@ -1333,7 +1272,12 @@ static Result __attribute__((noinline)) FileBrowser_CopyFile(const char *src, co
     if (R_FAILED(res))
         return res;
 
-    IFile_GetSize(&in, &size);
+    res = IFile_GetSize(&in, &size);
+    if (R_FAILED(res))
+    {
+        IFile_Close(&in);
+        return res;
+    }
 
     SdmcDeleteFile(dst);
 
@@ -1352,11 +1296,16 @@ static Result __attribute__((noinline)) FileBrowser_CopyFile(const char *src, co
     {
         u64 read = 0, written = 0;
 
-        res = IFile_Read(&in, &read, g_fbCopyBuf, sizeof(g_fbCopyBuf));
-        if (R_FAILED(res) || read == 0)
+        res = IFile_Read(&in, &read, g_menuWorkBuf, sizeof(g_menuWorkBuf));
+        if (R_FAILED(res))
             break;
+        if (read == 0)
+        {
+            res = -1;
+            break;
+        }
 
-        res = IFile_Write(&out, &written, g_fbCopyBuf, (u32)read, FS_WRITE_FLUSH);
+        res = IFile_Write(&out, &written, g_menuWorkBuf, (u32)read, FS_WRITE_FLUSH);
         if (R_FAILED(res))
             break;
     }
@@ -1364,12 +1313,15 @@ static Result __attribute__((noinline)) FileBrowser_CopyFile(const char *src, co
     IFile_Close(&out);
     IFile_Close(&in);
 
+    if (R_FAILED(res))
+        SdmcDeleteFile(dst);
+
     return res;
 }
 
 static Result FileBrowser_CopyTree(char *src, char *dst, u32 size, bool isDir, u32 depth)
 {
-    static char name[64];
+    static char name[256];
     FS_Archive archive = 0;
     Result res;
 
@@ -1401,27 +1353,34 @@ static Result FileBrowser_CopyTree(char *src, char *dst, u32 size, bool isDir, u
         FS_DirectoryEntry *entry = &g_fbEntries[0];
         u32 n = 0;
 
-        if (R_FAILED(FSDIR_Read(dir, &n, 1, entry)) || n == 0)
+        res = FSDIR_Read(dir, &n, 1, entry);
+        if (R_FAILED(res) || n == 0)
             break;
 
         int units = utf16_to_utf8((u8 *)name, entry->name, sizeof(name) - 1);
-        if (units < 0)
-            continue;
+        if (units < 0 || (u32)units >= sizeof(name))
+        {
+            res = -1;
+            break;
+        }
         name[units] = 0;
 
-        FileBrowser_Join(src, size, src, name);
-        FileBrowser_Join(dst, size, dst, name);
-
-        FileBrowser_CopyTree(src, dst, size, (entry->attributes & 1) != 0, depth + 1);
+        if (!FileBrowser_Join(src, size, src, name) || !FileBrowser_Join(dst, size, dst, name))
+            res = -1;
+        else
+            res = FileBrowser_CopyTree(src, dst, size, (entry->attributes & 1) != 0, depth + 1);
 
         src[srcLen] = 0;
         dst[dstLen] = 0;
+
+        if (R_FAILED(res))
+            break;
     }
 
     FSDIR_Close(dir);
     FSUSER_CloseArchive(archive);
 
-    return 0;
+    return res;
 }
 
 static Result FileBrowser_Delete(const char *path, bool isDir)
@@ -1497,7 +1456,17 @@ static void FileBrowser_Paste(const char *destDir)
         return;
     }
 
-    FileBrowser_Join(dst, sizeof(dst), destDir, FileBrowser_BaseName(g_fbClipPath));
+    if (!FileBrowser_Join(dst, sizeof(dst), destDir, FileBrowser_BaseName(g_fbClipPath)))
+    {
+        FileBrowser_Notify("Paste", "Path is too long.", false);
+        return;
+    }
+
+    if (strcmp(dst, g_fbClipPath) == 0)
+    {
+        FileBrowser_Notify("Paste", "Source and destination are the same.", false);
+        return;
+    }
 
     if (g_fbClipIsDir && FileBrowser_IsPrefixOf(g_fbClipPath, destDir))
     {
@@ -1526,7 +1495,11 @@ static void FileBrowser_Paste(const char *destDir)
 
     if (g_fbClipMode == FB_CLIP_CUT)
     {
-        FileBrowser_Delete(g_fbClipPath, g_fbClipIsDir);
+        if (R_FAILED(FileBrowser_Delete(g_fbClipPath, g_fbClipIsDir)))
+        {
+            FileBrowser_Notify("Move", "Copied, but failed to delete the source.", false);
+            return;
+        }
         g_fbClipMode = FB_CLIP_NONE;
         FileBrowser_Notify("Move", "Moved.", true);
     }
@@ -1556,7 +1529,7 @@ void RosalinaMenu_FileBrowser(void)
 
     u32 count = FileBrowser_Load(path);
     s32 sel = 0, scroll = 0;
-    const s32 rows = 17;
+    const s32 rows = 15;
 
     menuEnter();
     do
@@ -1593,13 +1566,17 @@ void RosalinaMenu_FileBrowser(void)
             {
                 s32 e = idx - (atRoot ? 0 : 1);
                 if (g_fbDir[e])
-                    Draw_DrawFormattedString(10, y, col, "%s [%s]", cur, g_fbName[e]);
+                    Draw_DrawFormattedString(10, y, col, "%s [%.*s]", cur, (int)(FB_NAME_COLS - 2), g_fbName[e]);
                 else
-                    Draw_DrawFormattedString(10, y, col, "%s %s  (%u KB)", cur, g_fbName[e],
-                        (unsigned)(g_fbSize[e] >> 10));
+                {
+                    char sz[16];
+                    u32  szLen = sprintf(sz, "  (%u KB)", (unsigned)(g_fbSize[e] >> 10));
+                    Draw_DrawFormattedString(10, y, col, "%s %.*s%s", cur, (int)(FB_NAME_COLS - szLen), g_fbName[e], sz);
+                }
             }
             y += SPACING_Y;
         }
+        Draw_DrawScrollMarks(4 + 3 * SPACING_Y, rows, scroll, total, g_cursorColor);
 
         Draw_DrawFormattedString(10, 203, COLOR_WHITE, "Clipboard: %s%s   ",
             g_fbClipMode == FB_CLIP_NONE ? "(empty)" : (g_fbClipMode == FB_CLIP_CUT ? "[cut] " : "[copy] "),

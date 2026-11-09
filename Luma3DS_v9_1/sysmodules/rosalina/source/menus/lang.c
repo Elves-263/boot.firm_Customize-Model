@@ -34,6 +34,7 @@
 #define LANG_CFG_PATH "/luma/lang.cfg"
 
 LangCode g_language = LANG_EN;
+static bool g_langLoaded = false;
 
 static const char *const g_strings[STR_COUNT][LANG_COUNT] =
 {
@@ -63,10 +64,8 @@ static const char *const g_strings[STR_COUNT][LANG_COUNT] =
     [STR_FREE_MB] = { "Free: %u MB", "Kuuki: %u MB" },
     [STR_SD_FREE_N_A] = { "SD free: N/A", "SD kuuki: fumei" },
     [STR_SD_FREE_MB] = { "SD free: %u MB", "SD kuuki: %u MB" },
-    [STR_RESTORE_A_SAVED_COLOUR_BACKUP] = { "Restore a saved colour backup:", "Hozon shita iro no backup wo fukugen:" },
-    [STR_RESTORED_COLOURS_RELOADED] = { "Restored. Colours reloaded.", "Fukugen shimashita. Iro wo saidokomi." },
-    [STR_THAT_BACKUP_WAS_NOT_FOUND] = { "That backup was not found.", "Sono backup ga mitsukarimasen." },
-    [STR_A_RESTORE_B_BACK] = { "A: restore   B: back", "A: fukugen   B: modoru" },
+    [STR_CHECKING_FILES] = { "Checking files...", "Fairu wo kakunin shiteimasu..." },
+    [STR_SD_CHECK_LEGEND] = { "OK: fine   --: missing   NG: broken", "OK: seijou   --: nashi   NG: kowarete imasu" },
     [STR_PRESS_ANY_BUTTON] = { "Press any button.", "Nanika button wo oshite kudasai." },
     [STR_A_OPEN_X_COPY_Y_CUT_R_PASTE] = { "A: open   X: copy  Y: cut  R: paste", "A: hiraku X: copy Y: kiritori R: hari" },
     [STR_SELECT_DELETE_START_RENAME_L_NEW_DIR] = { "SELECT: delete  START: rename  L: new dir", "SELECT: sakujo START: kaimei L: folder" },
@@ -107,6 +106,7 @@ static const char *const g_strings[STR_COUNT][LANG_COUNT] =
     [STR_REGION] = { "Region %lu / %lu", "Ryouiki %lu / %lu" },
     [STR_WRITTEN_KB] = { "Written: %lu KB   ", "Kakikomi zumi: %lu KB   " },
     [STR_DONE_REGIONS_KB] = { "Done: %lu regions, %lu KB", "Kanryou: %lu ryouiki, %lu KB" },
+    [STR_CANCELLED_REGIONS_KB] = { "Cancelled: %lu regions, %lu KB", "Chuushi: %lu ryouiki, %lu KB" },
     [STR_MAP_TXT_LISTS_EVERY_REGION] = { "map.txt lists every region.", "map.txt ni zen ryouiki no ichiran." },
     [STR_MEMORY_DUMP_PICK_A_PROCESS] = { "Memory dump -- pick a process", "Memory dump -- process wo erabu" },
     [STR_A_DUMP_ALL_X_CODE_ONLY] = { "A: dump all   X: code only", "A: zenbu   X: code nomi" },
@@ -121,13 +121,8 @@ static const char *const g_strings[STR_COUNT][LANG_COUNT] =
 
 const char *Lang(u32 id)
 {
-    static bool loaded = false;
-
-    if (!loaded)
-    {
-        loaded = true;
+    if (!g_langLoaded)
         Lang_Load();
-    }
 
     if (id >= STR_COUNT)
         return "";
@@ -142,6 +137,8 @@ void Lang_Load(void)
     IFile file;
     u64   total = 0;
     char  buf[4] = { 0 };
+
+    g_langLoaded = true;
 
     if (R_FAILED(IFile_Open(&file, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
                             fsMakePath(PATH_ASCII, LANG_CFG_PATH), FS_OPEN_READ)))
@@ -181,6 +178,11 @@ void Lang_Save(void)
 
 void RosalinaMenu_Language(void)
 {
+    if (!g_langLoaded)
+        Lang_Load();
+
+    LangCode previous = g_language;
+
     Draw_Lock();
     Draw_ClearFramebuffer();
     Draw_FlushFramebuffer();
@@ -211,7 +213,7 @@ void RosalinaMenu_Language(void)
         u32 pressed = waitInputWithTimeout(1000);
 
         if (terminationRequest || (pressed & BUTTON_B))
-            return;
+            break;
 
         if (pressed & (BUTTON_UP | BUTTON_DOWN))
             g_language = (g_language == LANG_EN) ? LANG_JP : LANG_EN;
@@ -223,4 +225,6 @@ void RosalinaMenu_Language(void)
         }
     }
     while (!terminationRequest);
+
+    g_language = previous;
 }

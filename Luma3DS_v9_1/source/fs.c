@@ -122,6 +122,11 @@ bool fileDelete(const char *path)
     return f_unlink(path) == FR_OK;
 }
 
+bool fileRename(const char *oldPath, const char *newPath)
+{
+    return f_rename(oldPath, newPath) == FR_OK;
+}
+
 bool findPayload(char *path, u32 pressed)
 {
     const char *pattern;
