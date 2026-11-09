@@ -1,0 +1,10 @@
+.libctru/
+build/
+*.o
+*.d
+*.elf
+.firm/
+3DS/
+release/
+build.log
+.upgrade/
