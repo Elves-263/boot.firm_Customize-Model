@@ -437,6 +437,10 @@ void menuRequestClose(void)
     menuCloseRequested = true;
 }
 
+#define MENU_MAX_ROWS 16
+
+static u32 menuScrollOffset;
+
 static void menuDraw(Menu *menu, u32 selected)
 {
     char versionString[16];
@@ -466,6 +470,33 @@ static void menuDraw(Menu *menu, u32 selected)
     if (g_safeMode)
         Draw_DrawString(10 + 22 * SPACING_X, 10, COLOR_RED, "SAFE");
     u32 numItems = menuCountItems(menu);
+
+    u32 nbVisible = 0;
+    u32 selectedRow = 0;
+
+    for(u32 i = 0; i < numItems; i++)
+    {
+        if (menuItemIsHidden(&menu->items[i]))
+            continue;
+        if (i == selected)
+            selectedRow = nbVisible;
+        ++nbVisible;
+    }
+
+    if(nbVisible <= MENU_MAX_ROWS)
+        menuScrollOffset = 0;
+    else
+    {
+        if(selectedRow < menuScrollOffset)
+            menuScrollOffset = selectedRow;
+        else if(selectedRow >= menuScrollOffset + MENU_MAX_ROWS)
+            menuScrollOffset = selectedRow - MENU_MAX_ROWS + 1;
+
+        if(menuScrollOffset > nbVisible - MENU_MAX_ROWS)
+            menuScrollOffset = nbVisible - MENU_MAX_ROWS;
+    }
+
+    u32 row = 0;
     u32 dispY = 0;
 
     for(u32 i = 0; i < numItems; i++)
@@ -473,9 +504,29 @@ static void menuDraw(Menu *menu, u32 selected)
         if (menuItemIsHidden(&menu->items[i]))
             continue;
 
-        Draw_DrawString(30, 30 + dispY, g_textColor, menu->items[i].title);
-        Draw_DrawCharacter(10, 30 + dispY, g_cursorColor, i == selected ? '>' : ' ');
+        if(row >= menuScrollOffset && row < menuScrollOffset + MENU_MAX_ROWS)
+        {
+            Draw_DrawFormattedString(30, 30 + dispY, g_textColor, "%-44s", menu->items[i].title);
+            Draw_DrawCharacter(10, 30 + dispY, g_cursorColor, i == selected ? '>' : ' ');
+            dispY += SPACING_Y;
+        }
+
+        ++row;
+    }
+
+    while(dispY < MENU_MAX_ROWS * SPACING_Y)
+    {
+        Draw_DrawFormattedString(30, 30 + dispY, g_textColor, "%-44s", "");
+        Draw_DrawCharacter(10, 30 + dispY, g_cursorColor, ' ');
         dispY += SPACING_Y;
+    }
+
+    if(nbVisible > MENU_MAX_ROWS)
+    {
+        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30, g_cursorColor,
+                           menuScrollOffset > 0 ? '^' : ' ');
+        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30 + (MENU_MAX_ROWS - 1) * SPACING_Y, g_cursorColor,
+                           menuScrollOffset + MENU_MAX_ROWS < nbVisible ? 'v' : ' ');
     }
 
     if(miniSocEnabled)

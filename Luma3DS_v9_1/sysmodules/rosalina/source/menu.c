@@ -217,6 +217,10 @@ void menuLeave(void)
     }
 }
 
+#define MENU_MAX_ROWS 16
+
+static u32 menuScrollOffset;
+
 static void menuDraw(Menu *menu, u32 selected)
 {
     char versionString[16];
@@ -254,12 +258,44 @@ static void menuDraw(Menu *menu, u32 selected)
     if (g_safeMode)
         Draw_DrawString(10 + 22 * SPACING_X, 10, COLOR_RED, "SAFE");
 
-    for(u32 i = 0; i < 15; i++)
+    u32 nbItems = menu->nbItems;
+
+    if(nbItems <= MENU_MAX_ROWS)
+        menuScrollOffset = 0;
+    else
     {
-        if(i >= menu->nbItems)
-            break;
-        Draw_DrawString(30, 30 + i * SPACING_Y, g_textColor, menu->items[i].title);
-        Draw_DrawCharacter(10, 30 + i * SPACING_Y, g_cursorColor, i == selected ? '>' : ' ');
+        if(selected < menuScrollOffset)
+            menuScrollOffset = selected;
+        else if(selected >= menuScrollOffset + MENU_MAX_ROWS)
+            menuScrollOffset = selected - MENU_MAX_ROWS + 1;
+
+        if(menuScrollOffset > nbItems - MENU_MAX_ROWS)
+            menuScrollOffset = nbItems - MENU_MAX_ROWS;
+    }
+
+    for(u32 row = 0; row < MENU_MAX_ROWS; row++)
+    {
+        u32 i = menuScrollOffset + row;
+        u32 y = 30 + row * SPACING_Y;
+
+        if(i < nbItems)
+        {
+            Draw_DrawFormattedString(30, y, g_textColor, "%-44s", menu->items[i].title);
+            Draw_DrawCharacter(10, y, g_cursorColor, i == selected ? '>' : ' ');
+        }
+        else
+        {
+            Draw_DrawFormattedString(30, y, g_textColor, "%-44s", "");
+            Draw_DrawCharacter(10, y, g_cursorColor, ' ');
+        }
+    }
+
+    if(nbItems > MENU_MAX_ROWS)
+    {
+        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30, g_cursorColor,
+                           menuScrollOffset > 0 ? '^' : ' ');
+        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30 + (MENU_MAX_ROWS - 1) * SPACING_Y, g_cursorColor,
+                           menuScrollOffset + MENU_MAX_ROWS < nbItems ? 'v' : ' ');
     }
 
     if(miniSocEnabled)

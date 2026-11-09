@@ -141,15 +141,12 @@ static u32     strlen16(const u16 *str)
 
 #define MAX_PLUGIN_ENTRIES 32
 #define SELECTION_FILENAME ".selected3gx"
-#define APPROVED_FILENAME  ".approved3gx"
 #define COLOR_GRAY RGB565(0x08, 0x10, 0x08)
 
 static char     g_pluginEntries[MAX_PLUGIN_ENTRIES][256];
 static bool     g_pluginEntryOk[MAX_PLUGIN_ENTRIES];
 static u32      g_pluginEntryCount;
 static u32      g_pluginEntryOkCount;
-static char     g_pluginDir[300];
-static u64      g_pluginHash;
 
 static bool     IsPluginLoadable(const char *fileName)
 {
@@ -176,7 +173,7 @@ static Result   EnumeratePluginFiles(u64 tid)
     Result              res;
     FS_Archive          sdmcArchive = 0;
     FS_DirectoryEntry   entries[10];
-    static const u16 *  validExtension = u"3gx";
+    static const u16 *  validExtension = u".3gx";
 
     g_pluginEntryCount = 0;
 
@@ -192,7 +189,6 @@ static Result   EnumeratePluginFiles(u64 tid)
     }
 
     strcat(g_path, "/");
-    strcpy(g_pluginDir, g_path);
 
     while (R_SUCCEEDED(FSDIR_Read(dir, &entriesNb, 10, entries)) && entriesNb != 0)
     {
@@ -204,11 +200,14 @@ static Result   EnumeratePluginFiles(u64 tid)
                 continue;
 
             u32 size = strlen16(entry->name);
-            if (size <= 5)
+            if (size <= 4)
                 continue;
 
-            u16 *fileExt = entry->name + size - 3;
-            if (memcmp(fileExt, validExtension, 3 * sizeof(u16)))
+            if (entry->name[0] == u'.')
+                continue;
+
+            u16 *fileExt = entry->name + size - 4;
+            if (memcmp(fileExt, validExtension, 4 * sizeof(u16)))
                 continue;
 
             int units = utf16_to_utf8((u8 *)g_pluginEntries[g_pluginEntryCount],
@@ -492,93 +491,11 @@ static const char *const g_destructiveKeywords[] =
 #define DESTRUCTIVE_KEYWORD_COUNT (sizeof(g_destructiveKeywords) / sizeof(g_destructiveKeywords[0]))
 #define DESTRUCTIVE_KEYWORD_MAXLEN 12
 
-static bool     IsHashApproved(u64 hash)
-{
-    char        path[320];
-    IFile       f;
-    u64         total = 0;
-    static char buf[1024];
-    bool        found = false;
-
-    if (g_pluginDir[0] == 0)
-        return false;
-
-    sprintf(path, "%s%s", g_pluginDir, APPROVED_FILENAME);
-
-    if (R_FAILED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
-                            fsMakePath(PATH_ASCII, path), FS_OPEN_READ)))
-        return false;
-
-    if (R_SUCCEEDED(IFile_Read(&f, &total, buf, sizeof(buf) - 1)) && total > 0)
-    {
-        buf[total] = 0;
-        char *p = buf;
-        while (*p)
-        {
-            u64     v = 0;
-            char   *start;
-
-            while (*p == '\r' || *p == '\n' || *p == ' ')
-                ++p;
-            start = p;
-            while (*p && *p != '\r' && *p != '\n')
-            {
-                char c = *p;
-                u32  d;
-
-                if (c >= '0' && c <= '9')       d = (u32)(c - '0');
-                else if (c >= 'a' && c <= 'f')  d = (u32)(c - 'a' + 10);
-                else if (c >= 'A' && c <= 'F')  d = (u32)(c - 'A' + 10);
-                else break;
-                v = (v << 4) | d;
-                ++p;
-            }
-            if (p != start && v == hash)
-            {
-                found = true;
-                break;
-            }
-            while (*p && *p != '\n')
-                ++p;
-        }
-    }
-
-    IFile_Close(&f);
-    return found;
-}
-
-static void     RememberApproval(u64 hash)
-{
-    char    path[320];
-    char    line[24];
-    IFile   f;
-    u64     total = 0;
-    u64     size = 0;
-
-    if (g_pluginDir[0] == 0)
-        return;
-
-    sprintf(path, "%s%s", g_pluginDir, APPROVED_FILENAME);
-
-    if (R_FAILED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
-                            fsMakePath(PATH_ASCII, path), FS_OPEN_CREATE | FS_OPEN_WRITE)))
-        return;
-
-    IFile_GetSize(&f, &size);
-    f.pos = size;
-
-    sprintf(line, "%016llx\n", hash);
-    IFile_Write(&f, &total, line, strlen(line), FS_WRITE_FLUSH);
-    IFile_Close(&f);
-}
-
 static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
 {
     static char buffer[2000];
     u64         offset = 0;
     u64         total;
-    u64         hash = 0xCBF29CE484222325ULL;
-    u64         hashed = 0;
     bool        found[DESTRUCTIVE_KEYWORD_COUNT] = { false };
 
     while (offset < fileSize)
@@ -595,21 +512,11 @@ static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
                 found[i] = true;
         }
 
-        u32 fresh = (offset >= hashed) ? 0 : (u32)(hashed - offset);
-        for (u32 i = fresh; i < chunk; ++i)
-        {
-            hash ^= (u8)buffer[i];
-            hash *= 0x100000001B3ULL;
-        }
-        if (offset + chunk > hashed)
-            hashed = offset + chunk;
-
         offset += (chunk > DESTRUCTIVE_KEYWORD_MAXLEN && offset + chunk < fileSize)
             ? chunk - (DESTRUCTIVE_KEYWORD_MAXLEN - 1) : chunk;
     }
 
     plugin->pos = 0;
-    g_pluginHash = hash;
 
     u32 hits = 0;
     for (u32 i = 0; i < DESTRUCTIVE_KEYWORD_COUNT; ++i)
@@ -619,9 +526,6 @@ static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
     u32 risk = hits * (100 / DESTRUCTIVE_KEYWORD_COUNT);
 
     if (risk == 0)
-        return true;
-
-    if (IsHashApproved(hash))
         return true;
 
     const char  *warningText = risk <= 20 ? "little dangerous" : risk <= 40 ? "moderately dangerous" : "very dangerous";
@@ -664,9 +568,6 @@ static bool     CheckForDestructivePlugin(IFile *plugin, u64 fileSize)
 
     if (terminationRequest || (keys & BUTTON_B))
         result = false;
-
-    if (result)
-        RememberApproval(hash);
 
     menuLeave();
     return result;
