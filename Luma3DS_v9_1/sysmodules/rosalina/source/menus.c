@@ -92,6 +92,7 @@ void RosalinaMenu_ShowCredits(void)
         posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "Networking code & basic GDB functionality by Stary");
         posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "InputRedirection by Stary (PoC by ShinyQuagsire)");
         posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "This boot.firm was modified by ELVES and Claude");
+        posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "Debugger: Yunic0n(kgmnln)");
 
         posY += 2 * SPACING_Y;
 
@@ -802,34 +803,30 @@ static bool Checker_HasPlugin(u64 tid, char *outName, u32 outSize)
     if (R_SUCCEEDED(FSUSER_OpenDirectory(&dir, arch, fsMakePath(PATH_ASCII, dirPath))))
     {
         u32                 n = 0;
-        FS_DirectoryEntry   entries[8];
+        FS_DirectoryEntry   entry;
         static const u16    ext[] = u"3gx";
 
-        while (!found && R_SUCCEEDED(FSDIR_Read(dir, &n, 8, entries)) && n > 0)
+        while (!found && R_SUCCEEDED(FSDIR_Read(dir, &n, 1, &entry)) && n > 0)
         {
-            for (u32 i = 0; i < n; ++i)
+            if (entry.attributes & 1)
+                continue;
+
+            u32 len = 0;
+            while (entry.name[len])
+                ++len;
+            if (len <= 4)
+                continue;
+
+            if (memcmp(entry.name + len - 3, ext, 3 * sizeof(u16)) == 0)
             {
-                if (entries[i].attributes & 1)
-                    continue;
-
-                u32 len = 0;
-                while (entries[i].name[len])
-                    ++len;
-                if (len <= 4)
-                    continue;
-
-                if (memcmp(entries[i].name + len - 3, ext, 3 * sizeof(u16)) == 0)
+                if (outName && outSize > 0)
                 {
-                    if (outName && outSize > 0)
-                    {
-                        int units = utf16_to_utf8((u8 *)outName, entries[i].name, outSize - 1);
-                        if (units < 0)
-                            units = 0;
-                        outName[units] = 0;
-                    }
-                    found = true;
-                    break;
+                    int units = utf16_to_utf8((u8 *)outName, entry.name, outSize - 1);
+                    if (units < 0)
+                        units = 0;
+                    outName[units] = 0;
                 }
+                found = true;
             }
         }
         FSDIR_Close(dir);
@@ -1325,7 +1322,7 @@ static bool FileBrowser_IsPrefixOf(const char *prefix, const char *path)
     return path[i] == 0 || path[i] == '/';
 }
 
-static Result FileBrowser_CopyFile(const char *src, const char *dst)
+static Result __attribute__((noinline)) FileBrowser_CopyFile(const char *src, const char *dst)
 {
     IFile in, out;
     Result res;
@@ -1370,8 +1367,9 @@ static Result FileBrowser_CopyFile(const char *src, const char *dst)
     return res;
 }
 
-static Result FileBrowser_CopyTree(const char *src, const char *dst, bool isDir, u32 depth)
+static Result FileBrowser_CopyTree(char *src, char *dst, u32 size, bool isDir, u32 depth)
 {
+    static char name[64];
     FS_Archive archive = 0;
     Result res;
 
@@ -1395,27 +1393,29 @@ static Result FileBrowser_CopyTree(const char *src, const char *dst, bool isDir,
         return res;
     }
 
+    u32 srcLen = strlen(src);
+    u32 dstLen = strlen(dst);
+
     for (;;)
     {
-        FS_DirectoryEntry entry;
+        FS_DirectoryEntry *entry = &g_fbEntries[0];
         u32 n = 0;
 
-        if (R_FAILED(FSDIR_Read(dir, &n, 1, &entry)) || n == 0)
+        if (R_FAILED(FSDIR_Read(dir, &n, 1, entry)) || n == 0)
             break;
 
-        char name[64];
-        int units = utf16_to_utf8((u8 *)name, entry.name, sizeof(name) - 1);
+        int units = utf16_to_utf8((u8 *)name, entry->name, sizeof(name) - 1);
         if (units < 0)
             continue;
         name[units] = 0;
 
-        char childSrc[512];
-        char childDst[512];
+        FileBrowser_Join(src, size, src, name);
+        FileBrowser_Join(dst, size, dst, name);
 
-        FileBrowser_Join(childSrc, sizeof(childSrc), src, name);
-        FileBrowser_Join(childDst, sizeof(childDst), dst, name);
+        FileBrowser_CopyTree(src, dst, size, (entry->attributes & 1) != 0, depth + 1);
 
-        FileBrowser_CopyTree(childSrc, childDst, (entry.attributes & 1) != 0, depth + 1);
+        src[srcLen] = 0;
+        dst[dstLen] = 0;
     }
 
     FSDIR_Close(dir);
@@ -1516,7 +1516,7 @@ static void FileBrowser_Paste(const char *destDir)
         }
     }
 
-    res = FileBrowser_CopyTree(g_fbClipPath, dst, g_fbClipIsDir, 0);
+    res = FileBrowser_CopyTree(g_fbClipPath, dst, sizeof(dst), g_fbClipIsDir, 0);
 
     if (R_FAILED(res))
     {
