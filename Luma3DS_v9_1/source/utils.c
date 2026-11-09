@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   waitInput function based on code by d0k3 https://github.com/d0k3/Decrypt9WIP/blob/master/source/hid.c
+*/
 
 #include "utils.h"
 #include "i2c.h"
@@ -42,13 +44,13 @@ static void startChrono(void)
 
     if(isChronoStarted) return;
 
-    REG_TIMER_CNT(0) = 0; 
-    for(u32 i = 1; i < 4; i++) REG_TIMER_CNT(i) = 4; 
+    REG_TIMER_CNT(0) = 0; //67MHz
+    for(u32 i = 1; i < 4; i++) REG_TIMER_CNT(i) = 4; //Count-up
 
     for(u32 i = 0; i < 4; i++) REG_TIMER_VAL(i) = 0;
 
-    REG_TIMER_CNT(0) = 0x80; 
-    for(u32 i = 1; i < 4; i++) REG_TIMER_CNT(i) = 0x84; 
+    REG_TIMER_CNT(0) = 0x80; //67MHz; enabled
+    for(u32 i = 1; i < 4; i++) REG_TIMER_CNT(i) = 0x84; //Count-up; enabled
 
     isChronoStarted = true;
 }
@@ -93,7 +95,7 @@ u32 waitInput(bool isMenu)
 
         if(key == oldKey && (!isMenu || (!(key & DPAD_BUTTONS) || chrono() - initialValue < dPadDelay))) continue;
 
-        
+        //Make sure the key is pressed
         u32 i;
         for(i = 0; i < 0x13000 && key == HID_PAD; i++);
         if(i == 0x13000) break;
@@ -106,10 +108,10 @@ void mcuPowerOff(void)
 {
     if(bootType != FIRMLAUNCH && ARESCREENSINITIALIZED) clearScreens(false);
 
-    
+    //Shutdown LCD
     if(ARESCREENSINITIALIZED) i2cWriteRegister(I2C_DEV_MCU, 0x22, 1 << 0);
 
-    
+    //Ensure that all memory transfers have completed and that the data cache has been flushed
     flushEntireDCache();
 
     i2cWriteRegister(I2C_DEV_MCU, 0x20, 1 << 0);

@@ -54,7 +54,7 @@ Result SetSyscallDebugEventMask(u32 pid, bool enable, const u32 *mask)
 
     u32 tmpMask[8];
     if(enable && nbEnabled == MAX_DEBUG)
-        return 0xC86018FF; 
+        return 0xC86018FF; // Out of resource (255)
 
     if(enable && !usrToKernelMemcpy8(&tmpMask, mask, 32))
         return 0xE0E01BF5;
@@ -75,7 +75,7 @@ Result SetSyscallDebugEventMask(u32 pid, bool enable, const u32 *mask)
         {
                 KRecursiveLock__Unlock(&syscallDebugEventMaskLock);
                 KRecursiveLock__Unlock(criticalSectionLock);
-                return 0xE0E01BFD; 
+                return 0xE0E01BFD; // out of range (it's not fully technically correct but meh)
         }
 
         for(u32 i = id; i < nbEnabled - 1; i++)
@@ -181,7 +181,7 @@ Result KernelSetStateHook(u32 type, u32 varg1, u32 varg2, u32 varg3)
         }
         case 0x10007:
         {
-            
+            // A bit crude but do the job for a simple notification + reboot, nothing sensitive here
             if (varg1 > 255 && homeBtnPressed == NULL)
                 homeBtnPressed = PA_FROM_VA_PTR((u32 *)varg1);
             else if (homeBtnPressed != NULL && *homeBtnPressed == 0)

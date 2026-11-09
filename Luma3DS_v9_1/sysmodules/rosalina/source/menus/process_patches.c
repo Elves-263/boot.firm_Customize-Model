@@ -39,8 +39,8 @@ static Result ProcessPatchesMenu_DoPatchUnpatchFS(u32 textTotalRoundedSize)
     static u16 *off;
     static u16 origData[2];
     static const u16 pattern[2] = {
-        0x7401, 
-        0x2000, 
+        0x7401, // strb r1, [r0, #16]
+        0x2000, // movs r0, #0
     };
 
     if(patched)
@@ -54,16 +54,16 @@ static Result ProcessPatchesMenu_DoPatchUnpatchFS(u32 textTotalRoundedSize)
         if(off == NULL)
             return -1;
 
-        for(; (*off & 0xFF00) != 0xB500; off++); 
+        for(; (*off & 0xFF00) != 0xB500; off++); // Find function start
 
         memcpy(origData, off, 4);
-        off[0] = 0x2001; 
-        off[1] = 0x4770; 
+        off[0] = 0x2001; // mov r0, #1
+        off[1] = 0x4770; // bx lr
 
         patched = true;
     }
 
-    
+    //processPatchesMenu.items[1].title = patched ? "Unpatch FS for the archive checks" : "Patch FS for the archive checks";
     return 0;
 }
 
@@ -103,7 +103,7 @@ static u32 ProcessPatchesMenu_PatchUnpatchProcessByName(const char *name, Result
     OpenProcessByName(name, &processHandle);
 
     s64 textTotalRoundedSize = 0, startAddress = 0;
-    svcGetProcessInfo(&textTotalRoundedSize, processHandle, 0x10002); 
+    svcGetProcessInfo(&textTotalRoundedSize, processHandle, 0x10002); // only patch .text
     svcGetProcessInfo(&startAddress, processHandle, 0x10005);
     if(R_FAILED(res = svcMapProcessMemoryEx(CUR_PROCESS_HANDLE, 0x00100000, processHandle, (u32) startAddress, textTotalRoundedSize)))
         return res;

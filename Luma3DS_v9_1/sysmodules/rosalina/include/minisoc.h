@@ -55,10 +55,17 @@ int socAccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 int socPoll(struct pollfd *fds, nfds_t nfds, int timeout);
 int socSetsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
 int socClose(int sockfd);
+int socConnect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+
+// soc:U の gethostbyname が結果を書く大きさ
+#define SOC_HOSTENT_BUFFER_SIZE 0x1A88
+// name の IPv4 アドレスを 1 つ *addr に入れる（ネットワークのバイト順）。outbuf は SOC_HOSTENT_BUFFER_SIZE
+// バイトの作業用（大きいので呼ぶ側が用意する）。成功は 0、失敗は -1
+int socGethostbyname(const char *name, u32 *addr, void *outbuf);
 
 ssize_t soc_recv(int sockfd, void *buf, size_t len, int flags);
 ssize_t soc_send(int sockfd, const void *buf, size_t len, int flags);
 
-
+// actually provided by ctrulib
 ssize_t soc_recvfrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 ssize_t soc_sendto(int sockfd, const void *buf, size_t len, int flags, const struct sockaddr *dest_addr, socklen_t addrlen);

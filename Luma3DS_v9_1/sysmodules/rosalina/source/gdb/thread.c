@@ -115,7 +115,7 @@ GDB_DECLARE_HANDLER(SetThreadId)
     if(ctx->commandData[0] == 'g')
     {
         if(strncmp(ctx->commandData + 1, "-1", 2) == 0)
-            return GDB_ReplyErrno(ctx, EILSEQ); 
+            return GDB_ReplyErrno(ctx, EILSEQ); // a thread must be specified
 
         u32 id;
         if(GDB_ParseHexIntegerList(&id, ctx->commandData + 1, 1, 0) == NULL)
@@ -125,7 +125,7 @@ GDB_DECLARE_HANDLER(SetThreadId)
     }
     else if(ctx->commandData[0] == 'c')
     {
-        
+        // We can't stop/continue particular threads (uncompliant behavior)
         if(strncmp(ctx->commandData + 1, "-1", 2) == 0)
             ctx->selectedThreadIdForContinuing = 0;
         else
@@ -169,7 +169,7 @@ GDB_DECLARE_QUERY_HANDLER(CurrentThreadId)
 static void GDB_GenerateThreadListData(GDBContext *ctx)
 {
     u32 aliveThreadIds[MAX_DEBUG_THREAD];
-    u32 nbAliveThreads = 0; 
+    u32 nbAliveThreads = 0; // just in case. This is probably redundant
 
     for(u32 i = 0; i < ctx->nbThreads; i++)
     {
@@ -291,7 +291,7 @@ GDB_DECLARE_QUERY_HANDLER(ThreadExtraInfo)
     else
         sprintf(sCoreIdeal, "ideal core: %u, ", val);
 
-    r = svcGetDebugThreadParam(&dummy, &val, ctx->debug, id, DBGTHREAD_PARAMETER_CPU_CREATOR); 
+    r = svcGetDebugThreadParam(&dummy, &val, ctx->debug, id, DBGTHREAD_PARAMETER_CPU_CREATOR); // Creator = "first ran, and running the thread"
     if(R_FAILED(r))
         sCoreCreator[0] = 0;
     else
@@ -309,7 +309,7 @@ GDB_DECLARE_QUERY_HANDLER(GetTLSAddr)
     if(GDB_ParseHexIntegerList(lst, ctx->commandData, 3, 0) == NULL)
         return GDB_ReplyErrno(ctx, EILSEQ);
 
-    
+    // We don't care about the 'lm' parameter...
     u32 id = lst[0];
     u32 offset = lst[1];
 

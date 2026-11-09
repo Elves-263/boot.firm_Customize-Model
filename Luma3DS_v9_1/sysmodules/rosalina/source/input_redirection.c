@@ -26,7 +26,7 @@
 
 #include <3ds.h>
 #include <arpa/inet.h>
-#include "utils.h" 
+#include "utils.h" // for makeARMBranch
 #include "minisoc.h"
 #include "input_redirection.h"
 #include "menus.h"
@@ -47,10 +47,10 @@ MyThread *inputRedirectionCreateThread(void)
     return &inputRedirectionThread;
 }
 
-
+//                       local hid,  local tsrd  localcprd,  localtswr,  localcpwr,  remote hid, remote ts,  remote circle
 static u32 hidData[] = { 0x00000FFF, 0x02000000, 0x007FF7FF, 0x00000000, 0x00000000, 0x00000FFF, 0x02000000, 0x007FF7FF };
-
-static u32 irData[] = { 0x80800081 }; 
+//                      remote ir
+static u32 irData[] = { 0x80800081 }; // Default: C-Stick at the center, no buttons.
 
 int inputRedirectionStartResult;
 
@@ -85,7 +85,7 @@ void inputRedirectionThreadMain(void)
     svcSignalEvent(inputRedirectionThreadStartedEvent);
 
     u32 *hidDataPhys = PA_FROM_VA_PTR(hidData);
-    hidDataPhys += 5; 
+    hidDataPhys += 5; // skip to +20
 
     u32 *irDataPhys = PA_FROM_VA_PTR(irData);
 
@@ -122,15 +122,15 @@ void inputRedirectionThreadMain(void)
                 oldSpecialButtons = specialButtons;
                 memcpy(&specialButtons, buf + 16, 4);
 
-                if(!(oldSpecialButtons & 1) && (specialButtons & 1)) 
+                if(!(oldSpecialButtons & 1) && (specialButtons & 1)) // HOME button pressed
                     srvPublishToSubscriber(0x204, 0);
-                else if((oldSpecialButtons & 1) && !(specialButtons & 1)) 
+                else if((oldSpecialButtons & 1) && !(specialButtons & 1)) // HOME button released
                     srvPublishToSubscriber(0x205, 0);
 
-                if(!(oldSpecialButtons & 2) && (specialButtons & 2)) 
+                if(!(oldSpecialButtons & 2) && (specialButtons & 2)) // POWER button pressed
                     srvPublishToSubscriber(0x202, 0);
 
-                if(!(oldSpecialButtons & 4) && (specialButtons & 4)) 
+                if(!(oldSpecialButtons & 4) && (specialButtons & 4)) // POWER button held long
                     srvPublishToSubscriber(0x203, 0);
             }
         }
@@ -159,7 +159,7 @@ Result InputRedirection_DoOrUndoPatches(void)
 
     if(R_SUCCEEDED(res))
     {
-        svcGetProcessInfo(&textTotalRoundedSize, processHandle, 0x10002); 
+        svcGetProcessInfo(&textTotalRoundedSize, processHandle, 0x10002); // only patch .text + .data
         svcGetProcessInfo(&rodataTotalRoundedSize, processHandle, 0x10003);
         svcGetProcessInfo(&dataTotalRoundedSize, processHandle, 0x10004);
 
@@ -172,11 +172,11 @@ Result InputRedirection_DoOrUndoPatches(void)
         {
             static const u32 hidOrigRegisterAndValue[] = { 0x1EC46000, 0x4001 };
             static const u32 hidOrigCode[] = {
-                0xE92D4070, 
-                0xE1A05001, 
-                0xEE1D4F70, 
-                0xE3A01801, 
-                0xE5A41080, 
+                0xE92D4070, // push {r4-r6, lr}
+                0xE1A05001, // mov  r5, r1
+                0xEE1D4F70, // mrc  p15, 0, r4, c13, c0, 3
+                0xE3A01801, // mov  r1, #0x10000
+                0xE5A41080, // str  r1, [r4,#0x80]!
             };
 
             static u32 *hidRegPatchOffsets[2];
@@ -193,9 +193,9 @@ Result InputRedirection_DoOrUndoPatches(void)
                 u32 hidDataPhys = (u32)PA_FROM_VA_PTR(hidData);
                 u32 hidCodePhys = (u32)PA_FROM_VA_PTR(&hidCodePatchFunc);
                 u32 hidHook[] = {
-                    0xE59F3004, 
-                    0xE59FC004, 
-                    0xE12FFF1C, 
+                    0xE59F3004, // ldr r3,  [pc, #4]
+                    0xE59FC004, // ldr r12, [pc, #4]
+                    0xE12FFF1C, // bx  r12
                     hidDataPhys,
                     hidCodePhys,
                 };
@@ -237,7 +237,7 @@ Result InputRedirection_DoOrUndoPatches(void)
     res = OpenProcessByName("ir", &processHandle);
     if(R_SUCCEEDED(res) && osGetKernelVersion() >= SYSTEM_VERSION(2, 44, 6))
     {
-        svcGetProcessInfo(&textTotalRoundedSize, processHandle, 0x10002); 
+        svcGetProcessInfo(&textTotalRoundedSize, processHandle, 0x10002); // only patch .text + .data
         svcGetProcessInfo(&rodataTotalRoundedSize, processHandle, 0x10003);
         svcGetProcessInfo(&dataTotalRoundedSize, processHandle, 0x10004);
 
@@ -250,25 +250,25 @@ Result InputRedirection_DoOrUndoPatches(void)
         {
             static bool useOldSyncCode;
             static u32 irOrigReadingCode[5] = {
-                0xE5940000, 
-                0xE1A01005, 
-                0xE3A03005, 
-                0xE3A02011, 
-                0x00000000  
+                0xE5940000, // ldr r0, [r4]
+                0xE1A01005, // mov r1, r5
+                0xE3A03005, // mov r3, #5
+                0xE3A02011, // mov r2, #17
+                0x00000000  // (bl i2c_read_raw goes here)
             };
 
             static const u32 irOrigWaitSyncCode[] = {
-                0xEF000024, 
-                0xE1B01FA0, 
-                0xE1A0A000, 
+                0xEF000024, // svc 0x24 (WaitSynchronization)
+                0xE1B01FA0, // movs r1, r0, lsr#31
+                0xE1A0A000, // mov r10, r0
             }, irOrigWaitSyncCodeOld[] = {
-                0xE0AC6000, 
-                0xE5D70000, 
-            }; 
+                0xE0AC6000, // adc r6, r12, r0
+                0xE5D70000, // ldrb r0, [r7]
+            }; // pattern for 8.1
 
             static const u32 irOrigCppFlagCode[] = {
-                0xE3550000, 
-                0xE3A0B080, 
+                0xE3550000, // cmp r5, #0
+                0xE3A0B080, // mov r11, #0x80
             };
 
             static u32 *irHookLoc, *irWaitSyncLoc, *irCppFlagLoc;
@@ -288,10 +288,10 @@ Result InputRedirection_DoOrUndoPatches(void)
                 u32 irCodePhys = (u32)PA_FROM_VA_PTR(&irCodePatchFunc);
 
                 u32 irHook[] = {
-                    0xE5940000, 
-                    0xE1A01005, 
-                    0xE59FC000, 
-                    0xE12FFF3C, 
+                    0xE5940000, // ldr r0, [r4]
+                    0xE1A01005, // mov r1, r5
+                    0xE59FC000, // ldr r12, [pc] (actually +8)
+                    0xE12FFF3C, // blx r12
                     irCodePhys,
                 };
 
@@ -331,15 +331,15 @@ Result InputRedirection_DoOrUndoPatches(void)
                 irWaitSyncLoc = off2;
                 irCppFlagLoc = off3;
 
-                irOrigReadingCode[4] = off[4]; 
+                irOrigReadingCode[4] = off[4]; // Copy the branch.
 
                 memcpy(irHookLoc, &irHook, sizeof(irHook));
 
-                
-                *irWaitSyncLoc = 0xE3A00000; 
+                // This "NOP"s out a WaitSynchronisation1 (on the event bound to the 'IR' interrupt) or the check of a previous one
+                *irWaitSyncLoc = 0xE3A00000; // mov r0, #0
 
-                
-                *irCppFlagLoc = 0xE3150000; 
+                // This NOPs out a flag check in ir:user's CPP emulation
+                *irCppFlagLoc = 0xE3150000; // tst r5, #0
             }
         }
 

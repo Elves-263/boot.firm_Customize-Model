@@ -42,3 +42,7 @@ Result IFile_Close(IFile *file);
 Result IFile_GetSize(IFile *file, u64 *size);
 Result IFile_Read(IFile *file, u64 *total, void *buffer, u32 len);
 Result IFile_Write(IFile *file, u64 *total, void *buffer, u32 len, u32 flags);
+
+#define IFILE_PATH_UNITS 512
+
+FS_Path IFile_MakeUtf8Path(u16 *buf, const char *path);

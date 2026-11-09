@@ -34,9 +34,19 @@
 #include "utils.h"
 #include "plgloader.h"
 #include "menus/n3ds.h"
-#include "menus/battery.h"
+#include "menus/ftpd.h"
 #include "menus/cheats.h"
+#include "font_jp.h"
 #include "minisoc.h"
+#include "update_check.h"
+#include "menus/lang.h"
+
+// 方向キーを押し続けたときの連続入力。v13.4 の hidSetRepeatParameters(200, 100) に合わせる
+#define INPUT_REPEAT_DELAY      (SYSCLOCK_ARM11 / 5)    // 押してから連続入力を始めるまで（200 ms）
+#define INPUT_REPEAT_INTERVAL   (SYSCLOCK_ARM11 / 10)   // 連続入力の間隔（100 ms）
+
+static u32 inputRepeatKeys; // 最後に返したキー。そのまま押され続けていれば方向キーを繰り返す
+static u64 inputRepeatTick; // 次に繰り返す時刻
 
 u32 waitInputWithTimeout(u32 msec)
 {
@@ -44,9 +54,15 @@ u32 waitInputWithTimeout(u32 msec)
     u32 key = 0;
     u32 n = 0;
 
-    
+    //Wait for no keys to be pressed. Direction keys held since the last returned input are repeated
     while(HID_PAD && !terminationRequest && (msec == 0 || n < msec))
     {
+        if((inputRepeatKeys & DIRECTIONAL_KEYS) != 0 && HID_PAD == inputRepeatKeys && svcGetSystemTick() >= inputRepeatTick)
+        {
+            inputRepeatTick = svcGetSystemTick() + INPUT_REPEAT_INTERVAL;
+            return inputRepeatKeys & DIRECTIONAL_KEYS;
+        }
+
         svcSleepThread(1 * 1000 * 1000LL);
         n++;
     }
@@ -54,9 +70,11 @@ u32 waitInputWithTimeout(u32 msec)
     if(terminationRequest || (msec != 0 && n >= msec))
         return 0;
 
+    inputRepeatKeys = 0;
+
     do
     {
-        
+        //Wait for a key to be pressed
         while(!HID_PAD && !terminationRequest && (msec == 0 || n < msec))
         {
             svcSleepThread(1 * 1000 * 1000LL);
@@ -68,7 +86,7 @@ u32 waitInputWithTimeout(u32 msec)
 
         key = HID_PAD;
 
-        
+        //Make sure it's pressed
         for(u32 i = 0x26000; i > 0; i --)
         {
             if(key != HID_PAD) break;
@@ -76,6 +94,9 @@ u32 waitInputWithTimeout(u32 msec)
         }
     }
     while(!pressedKey);
+
+    inputRepeatKeys = key;
+    inputRepeatTick = svcGetSystemTick() + INPUT_REPEAT_DELAY;
 
     return key;
 }
@@ -90,7 +111,7 @@ u32 waitComboWithTimeout(u32 msec)
     u32 key = 0;
     u32 n = 0;
 
-    
+    //Wait for no keys to be pressed
     while(HID_PAD && !terminationRequest && (msec == 0 || n < msec))
     {
         svcSleepThread(1 * 1000 * 1000LL);
@@ -127,14 +148,14 @@ u32 waitCombo(void)
 }
 
 static MyThread menuThread;
-static u8 ALIGN(8) menuThreadStack[THREAD_STACK_SIZE];
+static u8 ALIGN(8) menuThreadStack[0x1800];
 static u8 batteryLevel = 255;
 static u32 homeBtnPressed = 0;
 
 MyThread *menuCreateThread(void)
 {
     svcKernelSetState(0x10007, &homeBtnPressed);
-    if(R_FAILED(MyThread_Create(&menuThread, menuThreadMain, menuThreadStack, THREAD_STACK_SIZE, 52, CORE_SYSTEM)))
+    if(R_FAILED(MyThread_Create(&menuThread, menuThreadMain, menuThreadStack, sizeof(menuThreadStack), 52, CORE_SYSTEM)))
         svcBreak(USERBREAK_PANIC);
     return &menuThread;
 }
@@ -156,20 +177,33 @@ void    menuThreadMain(void)
         N3DSMenu_UpdateStatus();
 
     bool isAcURegistered = false;
+    bool chainloadChecked = false;
 
     while(!terminationRequest)
     {
+        // SD を読めるようになってから（ac:u が登録されたあと）1 度だけ確かめる
+        if(!chainloadChecked)
+        {
+            bool registered = false;
+            if(R_SUCCEEDED(srvIsServiceRegistered(&registered, "ac:u")) && registered)
+            {
+                ChainloadCheckFailed();
+                chainloadChecked = true;
+            }
+        }
+
         if((HID_PAD & menuCombo) == menuCombo)
         {
             if (!isAcURegistered)
                 isAcURegistered = R_SUCCEEDED(srvIsServiceRegistered(&isAcURegistered, "ac:u"))
                     && isAcURegistered;
 
-            else
+            // 3gx セレクターなどを表示している間は開かない
+            else if(menuEnterIfClosed())
             {
-                menuEnter();
                 if(isN3DS) N3DSMenu_UpdateStatus();
                 PluginLoader__UpdateMenu();
+                FontJp_Retry();
                 menuShow(&rosalinaMenu);
                 menuLeave();
             }
@@ -177,47 +211,113 @@ void    menuThreadMain(void)
         else
         {
             Cheat_ApplyCheats();
+            Cheat_AutoEnable();
         }
 
-        
+        // Check for home button on O3DS Mode3 with plugin loaded
         if (homeBtnPressed != 0)
         {
             if (DispWarningOnHome())
-                svcKernelSetState(7); 
+                svcKernelSetState(7); ///< reboot is fine since exiting a mode3 game reboot anyway
 
             homeBtnPressed = 0;
         }
 
-        Battery_Sample();
+        Ftpd_ReleaseMemory();
 
         svcSleepThread(50 * 1000 * 1000LL);
     }
 }
 
 static s32 menuRefCount = 0;
-void menuEnter(void)
+bool menuEnter(void)
 {
-    if(AtomicPostIncrement(&menuRefCount) == 0)
+    bool ok = true;
+
+    Draw_Lock();
+    if(menuRefCount == 0)
     {
-        svcKernelSetState(0x10000, 1);
-        svcSleepThread(5 * 1000 * 100LL);
-        Draw_SetupFramebuffer();
-        Draw_ClearFramebuffer();
+        inputRepeatKeys = 0; // 前に開いたときの押しっぱなしを引き継がない
+        ok = R_SUCCEEDED(Draw_AllocateFramebufferCache());
+        if(ok)
+        {
+            svcKernelSetState(0x10000, 1);
+            svcSleepThread(5 * 1000 * 100LL);
+            Draw_SetupFramebuffer();
+            Draw_ClearFramebuffer();
+        }
     }
+    if(ok)
+        ++menuRefCount;
+    Draw_Unlock();
+
+    return ok;
+}
+
+// Rosalina メニューや 3gx セレクターなど、ほかの画面が開いていないときだけ開く
+bool menuEnterIfClosed(void)
+{
+    bool ok = false;
+
+    Draw_Lock();
+    if(menuRefCount == 0)
+        ok = menuEnter();
+    Draw_Unlock();
+
+    return ok;
+}
+
+// 3gx セレクターなどの画面を開く。Rosalina メニューを開いている間は閉じるまで待つ。
+// 開けなかったとき（メモリ不足など）は false
+bool menuEnterWhenClosed(void)
+{
+    for(;;)
+    {
+        bool wasOpen = menuIsOpen();
+
+        if(menuEnterIfClosed())
+            return true;
+        if(!wasOpen && !menuIsOpen())
+            return false;
+        svcSleepThread(100 * 1000 * 1000LL);
+    }
+}
+
+// 致命的エラーの表示用。メニュー用のメモリ（画面の退避先）を確保できなくても、
+// 退避せずに画面を切り替えて表示する（このあとは再起動するので元に戻す必要がない）
+void menuEnterForFatalError(void)
+{
+    if(menuEnter())
+        return;
+
+    Draw_Lock();
+    ++menuRefCount;
+    svcKernelSetState(0x10000, 1);
+    svcSleepThread(5 * 1000 * 100LL);
+    Draw_SetupFramebuffer();
+    Draw_ClearFramebuffer();
+    Draw_Unlock();
+}
+
+// メニュー（3gx セレクターなどの画面を含む）を表示しているか
+bool menuIsOpen(void)
+{
+    return menuRefCount > 0;
 }
 
 void menuLeave(void)
 {
     svcSleepThread(50 * 1000 * 1000);
 
-    if(AtomicDecrement(&menuRefCount) == 0)
+    Draw_Lock();
+    if(--menuRefCount == 0)
     {
-        Draw_Lock();
         Draw_FlushFramebuffer();
         Draw_RestoreFramebuffer();
-        Draw_Unlock();
+        Draw_FreeFramebufferCache();
         svcKernelSetState(0x10000, 1);
     }
+    Draw_Unlock();
 }
 
 #define MENU_MAX_ROWS 16
@@ -257,14 +357,30 @@ static void menuDraw(Menu *menu, u32 selected)
     else
         sprintf(versionString, "v%u.%u.%u", GET_VERSION_MAJOR(version), GET_VERSION_MINOR(version), GET_VERSION_REVISION(version));
 
-    AccentColor_EnsureLoaded();
-    u32 tagCol = strlen(menu->title) + 1;
+    // タイトルの右に「[v動作中の Luma / 改変版の版]」と「セーフ」（セーフモードのとき）を並べる。
+    // 右上の 15 桁分は IP アドレスの表示に使うため、収まらないときは「[v動作中の Luma]」にし、
+    // それでも収まらなければ省く（「セーフ」は残す）
+    static const char *const tags[] = { FORK_TITLE_TAG, FORK_TITLE_TAG_SHORT, "" };
+    static const char safeTag[] = TR("セーフ", "SAFE");
+    const u32 endCol = (SCREEN_BOT_WIDTH - 20) / SPACING_X - 15;
+    const u32 safeCols = g_safeMode ? Draw_TextColumns(safeTag) : 0;
+    const char *tag = "";
+    u32 tagCol = Draw_TextColumns(menu->title) + 1;
     if (tagCol < 15)
         tagCol = 15;
-    Draw_DrawString(10, 10, g_accentColor, menu->title);
-    Draw_DrawString(10 + tagCol * SPACING_X, 10, g_accentColor, "[" FORK_PACKAGE_TAG "]");
+    for (u32 i = 0; i < sizeof(tags) / sizeof(tags[0]); ++i)
+    {
+        u32 len = strlen(tags[i]);
+        if (tagCol + len + (safeCols != 0 && len != 0 ? 1 : 0) + safeCols <= endCol)
+        {
+            tag = tags[i];
+            break;
+        }
+    }
+    Draw_DrawString(10, 10, COLOR_TITLE, menu->title);
+    Draw_DrawString(10 + tagCol * SPACING_X, 10, COLOR_TITLE, tag);
     if (g_safeMode)
-        Draw_DrawString(10 + (tagCol + sizeof("[" FORK_PACKAGE_TAG "]")) * SPACING_X, 10, COLOR_RED, "SAFE");
+        Draw_DrawString(10 + (tagCol + strlen(tag) + (tag[0] != 0 ? 1 : 0)) * SPACING_X, 10, COLOR_RED, safeTag);
 
     u32 nbItems = menu->nbItems;
 
@@ -288,21 +404,24 @@ static void menuDraw(Menu *menu, u32 selected)
 
         if(i < nbItems)
         {
-            Draw_DrawFormattedString(30, y, g_textColor, "%-44s", menu->items[i].title);
-            Draw_DrawCharacter(10, y, g_cursorColor, i == selected ? '>' : ' ');
+            // 前の項目の字を消すため、44 桁まで空白で埋める（%-44s はバイト数で埋めるので使わない）
+            const char *title = menu->items[i].title;
+            u32 cols = Draw_TextColumns(title);
+            Draw_DrawFormattedString(30, y, COLOR_WHITE, "%s%*s", title, cols < 44 ? (int)(44 - cols) : 0, "");
+            Draw_DrawCharacter(10, y, COLOR_TITLE, i == selected ? '>' : ' ');
         }
         else
         {
-            Draw_DrawFormattedString(30, y, g_textColor, "%-44s", "");
-            Draw_DrawCharacter(10, y, g_cursorColor, ' ');
+            Draw_DrawFormattedString(30, y, COLOR_WHITE, "%-44s", "");
+            Draw_DrawCharacter(10, y, COLOR_TITLE, ' ');
         }
     }
 
     if(nbItems > MENU_MAX_ROWS)
     {
-        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30, g_cursorColor,
+        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30, COLOR_TITLE,
                            menuScrollOffset > 0 ? '^' : ' ');
-        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30 + (MENU_MAX_ROWS - 1) * SPACING_Y, g_cursorColor,
+        Draw_DrawCharacter(SCREEN_BOT_WIDTH - 16, 30 + (MENU_MAX_ROWS - 1) * SPACING_Y, COLOR_TITLE,
                            menuScrollOffset + MENU_MAX_ROWS < nbItems ? 'v' : ' ');
     }
 
@@ -330,6 +449,22 @@ static void menuDraw(Menu *menu, u32 selected)
     Draw_FlushFramebuffer();
 }
 
+// 左右キーで 1 画面（page 項目）ずつ動かした先を返す。first から last の範囲で、
+// 端を越えるときは端で止め、すでに端にいるときは反対の端へ回る
+u32 menuPageMove(u32 pos, u32 first, u32 last, u32 page, bool forward)
+{
+    if(forward)
+    {
+        if(pos == last)
+            return first;
+        return last - pos > page ? pos + page : last;
+    }
+
+    if(pos == first)
+        return last;
+    return pos - first > page ? pos - page : first;
+}
+
 void menuShow(Menu *root)
 {
     u32 selectedItem = 0;
@@ -339,6 +474,8 @@ void menuShow(Menu *root)
     u32 previousSelectedItems[0x80];
 
     SDSpaceWarnIfLow();
+    ChainloadWarnIfFailed();
+    UpdateCheck_ShowNotice();
 
     Draw_Lock();
     Draw_ClearFramebuffer();
@@ -401,6 +538,8 @@ void menuShow(Menu *root)
             if(selectedItem-- <= 0)
                 selectedItem = currentMenu->nbItems - 1;
         }
+        else if(pressed & (BUTTON_LEFT | BUTTON_RIGHT))
+            selectedItem = menuPageMove(selectedItem, 0, currentMenu->nbItems - 1, MENU_MAX_ROWS, (pressed & BUTTON_RIGHT) != 0);
 
         Draw_Lock();
         menuDraw(currentMenu, selectedItem);
@@ -409,11 +548,12 @@ void menuShow(Menu *root)
     while(!terminationRequest);
 }
 
-static const char *__press_b_to_close = "Press B to close";
+static const char *__press_b_to_close = TR("B: 閉じる", "B: close");
 
 void    DispMessage(const char *title, const char *message)
 {
-    menuEnter();
+    if(!menuEnter())
+        return;
 
     Draw_Lock();
     Draw_ClearFramebuffer();
@@ -432,7 +572,7 @@ void    DispMessage(const char *title, const char *message)
         keys = waitComboWithTimeout(1000);
     }while (!terminationRequest && !(keys & BUTTON_B));
 
-    Draw_Unlock(); 
+    Draw_Unlock(); ///< Keep it locked until we exit the message
     menuLeave();
 }
 
@@ -441,7 +581,8 @@ u32    DispErrMessage(const char *title, const char *message, const Result error
     char buf[100];
 
     sprintf(buf, "Error code: 0x%08X", error);
-    menuEnter();
+    if(!menuEnter())
+        return error;
 
     Draw_Lock();
     Draw_ClearFramebuffer();
@@ -460,23 +601,24 @@ u32    DispErrMessage(const char *title, const char *message, const Result error
         keys = waitComboWithTimeout(1000);
     }while (!terminationRequest && !(keys & BUTTON_B));
 
-    Draw_Unlock();  
+    Draw_Unlock();  ///< Keep it locked until we exit the message
     menuLeave();
     return error;
 }
 
 u32     DispWarningOnHome(void)
 {
-    menuEnter();
+    if(!menuEnter())
+        return 0;
 
     Draw_Lock();
     Draw_ClearFramebuffer();
     Draw_FlushFramebuffer();
 
-    Draw_DrawString(10, 10, COLOR_TITLE, "Warning");
+    Draw_DrawString(10, 10, COLOR_TITLE, TR("警告", "Warning"));
 
-    u32 posY = Draw_DrawString(30, 40, COLOR_WHITE, "The HOME button is disabled\ndue to insufficient memory.");
-    Draw_DrawString(30, posY + 20, COLOR_WHITE, "Press [D-PAD Up + B] to exit the app.");
+    u32 posY = Draw_DrawString(30, 40, COLOR_WHITE, TR("メモリが足りないため、\nHOME ボタンを使えません。", "The HOME button is disabled\ndue to insufficient memory."));
+    Draw_DrawString(30, posY + 20, COLOR_WHITE, TR("[十字キー上 + B] でソフトを終了します。", "Press [D-PAD Up + B] to exit the app."));
     Draw_DrawString(200, 220, COLOR_TITLE, __press_b_to_close);
 
 
@@ -487,7 +629,7 @@ u32     DispWarningOnHome(void)
         keys = waitComboWithTimeout(1000);
     }while (!terminationRequest && !(keys & BUTTON_B));
 
-    Draw_Unlock(); 
+    Draw_Unlock(); ///< Keep it locked until we exit the message
     menuLeave();
 
     return (keys & BUTTON_UP) > 0;
@@ -508,21 +650,22 @@ void    DisplayPluginMenu(u32   *cmdbuf)
     const string    *items = (const string *)cmdbuf[7];
     const string    *hints = (const string *)cmdbuf[9];
 
-    menuEnter();
+    if(!menuEnter())
+        return;
     Draw_Lock();
 
     do
     {
-        
+        // Draw the menu
         {
-            
+            // Clear screen
             Draw_ClearFramebuffer();
             Draw_FlushFramebuffer();
 
-            
+            // Draw title
             Draw_DrawString(10, 10, COLOR_TITLE, title);
 
-            
+            // Draw items
             u32 i = MAX(0, (int)cursor - 7);
             u32 end = MIN(nbItems, i + 16);
             u32 posY = 30;
@@ -536,12 +679,14 @@ void    DisplayPluginMenu(u32   *cmdbuf)
                 if (states[i]) Draw_DrawCharacter(36, posY, COLOR_LIME, 'x');
             }
 
+            // Draw hint
+
             
             if (hints[cursor][0])
                 Draw_DrawString(10, 200, COLOR_TITLE, hints[cursor]);
         }
 
-        
+        // Wait for input
         u32 pressed = waitInput();
 
         if (pressed & BUTTON_A)

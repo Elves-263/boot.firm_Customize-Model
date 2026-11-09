@@ -24,7 +24,7 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/* This file was entirely written by fincs */
 
 #include <3ds.h>
 #include "3dsx.h"
@@ -40,7 +40,7 @@ u32 ldrArgvBuf[ARGVBUF_SIZE/4];
 
 typedef struct
 {
-    void* segPtrs[3]; 
+    void* segPtrs[3]; // code, rodata & data
     u32 segAddrs[3];
     u32 segSizes[3];
 } _3DSX_LoadInfo;
@@ -87,8 +87,8 @@ bool Ldr_Get3dsxSize(u32* pSize, IFile *file)
     SEC_ASSERT(segSizes[1] >= hdr.rodataSegSize);
     SEC_ASSERT(segSizes[2] >= hdr.dataSegSize);
 
-    
-    *pSize = segSizes[0] + segSizes[1] + segSizes[2] + 0x1000; 
+    // TODO: Check int overflow
+    *pSize = segSizes[0] + segSizes[1] + segSizes[2] + 0x1000; // One extra page reserved for settings/etc
 
     return true;
 }
@@ -126,7 +126,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
     u32* extraPage = (u32*)((char*)d.segPtrs[2] + d.segSizes[2]);
     u32 extraPageAddr = d.segAddrs[2] + d.segSizes[2];
 
-    
+    // Read the relocation headers
     for (i = 0; i < 3; i ++)
     {
         if (IFile_Read2(file, &extraPage[i*nRelocTables], hdr.relocHdrSize, readOffset) != hdr.relocHdrSize)
@@ -137,7 +137,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
         readOffset += hdr.relocHdrSize;
     }
 
-    
+    // Read the code segment
     if (IFile_Read2(file, d.segPtrs[0], hdr.codeSegSize, readOffset) != hdr.codeSegSize)
     {
         Log_PrintP("Cannot read code segment");
@@ -145,7 +145,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
     }
     readOffset += hdr.codeSegSize;
 
-    
+    // Read the rodata segment
     if (IFile_Read2(file, d.segPtrs[1], hdr.rodataSegSize, readOffset) != hdr.rodataSegSize)
     {
         Log_PrintP("Cannot read rodata segment");
@@ -153,7 +153,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
     }
     readOffset += hdr.rodataSegSize;
 
-    
+    // Read the data segment
     u32 dataLoadSegSize = hdr.dataSegSize - hdr.bssSize;
     if (IFile_Read2(file, d.segPtrs[2], dataLoadSegSize, readOffset) != dataLoadSegSize)
     {
@@ -162,7 +162,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
     }
     readOffset += dataLoadSegSize;
 
-    
+    // Relocate the segments
     for (i = 0; i < 3; i ++)
     {
         for (j = 0; j < nRelocTables; j ++)
@@ -170,7 +170,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
             int nRelocs = extraPage[i*nRelocTables + j];
             if (j >= (sizeof(_3DSX_RelocHdr)/4))
             {
-                
+                // Not using this header
                 readOffset += nRelocs;
                 continue;
             }
@@ -202,7 +202,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
                         u32 origData = *pos;
                         u32 subType = origData >> (32-4);
                         u32 addr = TranslateAddr(origData &~ 0xF0000000, &d, offsets);
-                        
+                        //Log_PrintP("%08lX<-%08lX", inAddr, addr);
                         switch (j)
                         {
                             case 0:
@@ -220,8 +220,8 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
                                 u32 data = addr - inAddr;
                                 switch (subType)
                                 {
-                                    case 0: *pos = data;            break; 
-                                    case 1: *pos = data &~ BIT(31); break; 
+                                    case 0: *pos = data;            break; // 32-bit signed offset
+                                    case 1: *pos = data &~ BIT(31); break; // 31-bit signed offset
                                     default:
                                         Log_PrintP("Unsupported relative reloc subtype (%lu)", subType);
                                         return 0;
@@ -236,7 +236,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
         }
     }
 
-    
+    // Detect and fill _prm structure
     PrmStruct* pst = (PrmStruct*) &codePages[1];
     if (pst->magic == _PRM_MAGIC)
     {
@@ -258,6 +258,8 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
         }
     }
 
+    // Create the codeset
+
     
     CodeSetHeader csinfo;
     memset(&csinfo, 0, sizeof(csinfo));
@@ -268,7 +270,7 @@ Handle Ldr_CodesetFrom3dsx(const char* name, u32* codePages, u32 baseAddr, IFile
     csinfo.ro_addr         = d.segAddrs[1];
     csinfo.ro_size         = d.segSizes[1] >> 12;
     csinfo.rw_addr         = d.segAddrs[2];
-    csinfo.rw_size         = (d.segSizes[2] >> 12) + 1; 
+    csinfo.rw_size         = (d.segSizes[2] >> 12) + 1; // One extra page reserved for settings/etc
     csinfo.text_size_total = csinfo.text_size;
     csinfo.ro_size_total   = csinfo.ro_size;
     csinfo.rw_size_total   = csinfo.rw_size;

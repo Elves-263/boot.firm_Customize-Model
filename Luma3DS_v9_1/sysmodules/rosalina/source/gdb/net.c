@@ -139,12 +139,12 @@ int GDB_ReceivePacket(GDBContext *ctx)
     int r = soc_recv(ctx->super.sockfd, ctx->buffer, sizeof(ctx->buffer), MSG_PEEK);
     if(r < 1)
         return -1;
-    if(ctx->buffer[0] == '+') 
+    if(ctx->buffer[0] == '+') // GDB sometimes acknowleges TCP acknowledgment packets (yes...). IDA does it properly
     {
         if(ctx->state == GDB_STATE_NOACK)
             return -1;
 
-        
+        // Consume it
         r = soc_recv(ctx->super.sockfd, ctx->buffer, 1, 0);
         if(r != 1)
             return -1;
@@ -163,12 +163,12 @@ int GDB_ReceivePacket(GDBContext *ctx)
     }
     int maxlen = r > (int)sizeof(ctx->buffer) ? (int)sizeof(ctx->buffer) : r;
 
-    if(ctx->buffer[0] == '$') 
+    if(ctx->buffer[0] == '$') // normal packet
     {
         char *pos;
         for(pos = ctx->buffer; pos < ctx->buffer + maxlen && *pos != '#'; pos++);
 
-        if(pos == ctx->buffer + maxlen) 
+        if(pos == ctx->buffer + maxlen) // malformed packet
             return -1;
 
         else
@@ -181,7 +181,7 @@ int GDB_ReceivePacket(GDBContext *ctx)
                 goto packet_error;
 
             ctx->commandEnd = pos;
-            *pos = 0; 
+            *pos = 0; // replace trailing '#' by a NUL character
         }
     }
     else if(ctx->buffer[0] == '\x03')
@@ -242,7 +242,7 @@ int GDB_SendPacket(GDBContext *ctx, const char *packetData, u32 len)
 
 int GDB_SendFormattedPacket(GDBContext *ctx, const char *packetDataFmt, ...)
 {
-    
+    // It goes without saying you shouldn't use that with user-controlled data...
     char buf[GDB_BUF_LEN + 1];
     va_list args;
     va_start(args, packetDataFmt);
@@ -289,7 +289,7 @@ int GDB_SendStreamData(GDBContext *ctx, const char *streamData, u32 offset, u32 
     }
 }
 
-int GDB_SendDebugString(GDBContext *ctx, const char *fmt, ...) 
+int GDB_SendDebugString(GDBContext *ctx, const char *fmt, ...) // unsecure
 {
     if(ctx->state == GDB_STATE_CLOSING || !(ctx->flags & GDB_FLAG_PROCESS_CONTINUING))
         return 0;

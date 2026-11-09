@@ -68,38 +68,38 @@ Result GetSystemInfoHook(s64 *out, s32 type, s32 param)
                     *out = cfwInfo.rosalinaFlags;
                     break;
 
-                case 0x200: 
+                case 0x200: // isRelease
                     *out = cfwInfo.flags & 1;
                     break;
-                case 0x201: 
+                case 0x201: // isN3DS
                     *out = (cfwInfo.flags >> 4) & 1;
                     break;
-                case 0x202: 
+                case 0x202: // needToInitSd
                     *out = (cfwInfo.flags >> 5) & 1;
                     break;
-                case 0x203: 
+                case 0x203: // isSdMode
                     *out = (cfwInfo.flags >> 6) & 1;
                     break;
                 default:
-                    res = 0xF8C007F4; 
+                    res = 0xF8C007F4; // not implemented
                     break;
             }
             break;
         }
 
-        case 0x10001: 
+        case 0x10001: // N3DS-related info
         {
             if(isN3DS)
             {
                 switch(param)
                 {
-                    case 0: 
+                    case 0: // current clock rate
                         *out = (((CFG11_MPCORE_CLKCNT >> 1) & 3) + 1) * 268;
                         break;
-                    case 1: 
+                    case 1: // higher clock rate
                         *out = (((CFG11_MPCORE_CFG >> 2) & 1) + 2) * 268;
                         break;
-                    case 2: 
+                    case 2: // L2C enabled status
                         *out = L2C_CTRL & 1;
                         break;
                     default:
@@ -113,7 +113,7 @@ Result GetSystemInfoHook(s64 *out, s32 type, s32 param)
             break;
         }
 
-        case 0x10002: 
+        case 0x10002: // MMU config (cached values from booting)
         {
             switch(param)
             {

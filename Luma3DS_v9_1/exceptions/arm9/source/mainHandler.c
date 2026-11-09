@@ -56,27 +56,27 @@ void __attribute__((noreturn)) mainHandler(u32 *registerDump, u32 type)
 
     registerDump[15] = pc;
 
-    
-    u8 *instr = (u8 *)pc + ((cpsr & 0x20) ? 2 : 4) - dumpHeader.codeDumpSize; 
+    //Dump code
+    u8 *instr = (u8 *)pc + ((cpsr & 0x20) ? 2 : 4) - dumpHeader.codeDumpSize; //wouldn't work well on 32-bit Thumb instructions, but it isn't much of a problem
     dumpHeader.codeDumpSize = ((u32)instr & (((cpsr & 0x20) != 0) ? 1 : 3)) != 0 ? 0 : safecpy(codeDump, instr, dumpHeader.codeDumpSize);
 
-    
+    //Copy register dump and code dump
     u8 *final = (u8 *)(FINAL_BUFFER + sizeof(ExceptionDumpHeader));
     final += safecpy(final, registerDump, dumpHeader.registerDumpSize);
     final += safecpy(final, codeDump, dumpHeader.codeDumpSize);
 
-    
+    //Dump stack in place
     dumpHeader.stackDumpSize = safecpy(final, (const void *)registerDump[13], 0x1000 - (registerDump[13] & 0xFFF));
 
     dumpHeader.totalSize = sizeof(ExceptionDumpHeader) + dumpHeader.registerDumpSize + dumpHeader.codeDumpSize + dumpHeader.stackDumpSize + dumpHeader.additionalDataSize;
 
-    
+    //Copy header (actually optimized by the compiler)
     *(ExceptionDumpHeader *)FINAL_BUFFER = dumpHeader;
 
-    if(ARESCREENSINITIALIZED) i2cWriteRegister(I2C_DEV_MCU, 0x22, 1 << 0); 
+    if(ARESCREENSINITIALIZED) i2cWriteRegister(I2C_DEV_MCU, 0x22, 1 << 0); //Shutdown LCD
 
-    ((void (*)())0xFFFF0830)(); 
+    ((void (*)())0xFFFF0830)(); //Ensure that all memory transfers have completed and that the data cache has been flushed
 
-    i2cWriteRegister(I2C_DEV_MCU, 0x20, 1 << 2); 
+    i2cWriteRegister(I2C_DEV_MCU, 0x20, 1 << 2); //Reboot
     while(true);
 }

@@ -2,7 +2,7 @@
 #include "3gx.h"
 #include "menus/lang.h"
 #include "ifile.h"
-#include "utils.h" 
+#include "utils.h" // for makeARMBranch
 #include "plgloader.h"
 #include "fmt.h"
 #include "menu.h"
@@ -12,7 +12,7 @@
 #include "sleep.h"
 
 #define MEMPERM_RW (MEMPERM_READ | MEMPERM_WRITE)
-#define MemBlockSize (5*1024*1024)  
+#define MemBlockSize (5*1024*1024) /* 5 MiB */
 
 typedef struct
 {
@@ -29,7 +29,7 @@ typedef struct
     u32     config[32];
 }   PluginLoadParameters;
 
-#define HeaderMagic (0x24584733)  
+#define HeaderMagic (0x24584733) /* "3GX$" */
 
 typedef struct
 {
@@ -47,6 +47,7 @@ typedef struct
 static bool         g_isEnabled;
 static u8  *        g_memBlock;
 static char         g_path[256];
+static u16          g_utf16Path[IFILE_PATH_UNITS];
 static Handle       g_process = 0;
 static u32          g_codeSize;
 static u32          g_heapSize;
@@ -56,7 +57,7 @@ static PluginLoadParameters    g_userDefinedLoadParameters;
 static MyThread     g_pluginLoaderThread;
 static u8 ALIGN(8)  g_pluginLoaderThreadStack[0x4000];
 
-
+// pluginLoader.s
 void        gamePatchFunc(void);
 
 void        PluginLoader__ThreadMain(void);
@@ -89,8 +90,8 @@ void        PluginLoader__UpdateMenu(void)
 {
     static const char *status[2] =
     {
-        "Plugin Loader: [Disabled]",
-        "Plugin Loader: [Enabled]"
+        TR("プラグインローダー: [無効]", "Plugin Loader: [Disabled]"),
+        TR("プラグインローダー: [有効]", "Plugin Loader: [Enabled]")
     };
 
     rosalinaMenu.items[isN3DS + 1].title = status[g_isEnabled];
@@ -106,10 +107,10 @@ static Result     MapPluginInProcess(Handle proc, u32 size)
     g_heapSize = header->heapSize = heapsize;
     g_codeSize = size;
 
-    
+    // From now on, all memory page mapped to the process should be rwx
     svcControlProcess(proc, PROCESSOP_SET_MMU_TO_RWX, 0, 0);
 
-    
+    // Plugin
     if (R_FAILED((res = svcMapProcessMemoryEx(proc, 0x07000000, CUR_PROCESS_HANDLE, (u32)g_memBlock, size))))
     {
         g_error.message = "Couldn't map plugin memory block";
@@ -117,7 +118,7 @@ static Result     MapPluginInProcess(Handle proc, u32 size)
         return res;
     }
 
-    
+    // Heap (to be used by the plugin)
     if (R_FAILED((res = svcMapProcessMemoryEx(proc, 0x06000000, CUR_PROCESS_HANDLE, (u32)g_memBlock + size, heapsize))))
     {
         g_error.message = "Couldn't map heap memory block";
@@ -125,7 +126,7 @@ static Result     MapPluginInProcess(Handle proc, u32 size)
         goto exit;
     }
 
-    
+    // Clear heap section
     memset32(g_memBlock + size, 0, heapsize);
 
 exit:
@@ -159,7 +160,7 @@ static bool     IsPluginLoadable(const char *fileName)
     sprintf(path, "%s%s", g_path, fileName);
 
     if (R_FAILED(IFile_Open(&f, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""),
-                            fsMakePath(PATH_ASCII, path), FS_OPEN_READ)))
+                            IFile_MakeUtf8Path(g_utf16Path, path), FS_OPEN_READ)))
         return false;
 
     ok = R_SUCCEEDED(Check_3gx_Magic(&f));
@@ -199,9 +200,11 @@ static Result   EnumeratePluginFiles(u64 tid)
         {
             FS_DirectoryEntry *entry = &entries[i];
 
+            // If entry is a folder, skip it
             if (entry->attributes & 1)
                 continue;
 
+            // Check extension
             u32 size = strlen16(entry->name);
             if (size <= 4)
                 continue;
@@ -209,13 +212,15 @@ static Result   EnumeratePluginFiles(u64 tid)
             if (entry->name[0] == u'.')
                 continue;
 
+            // Convert name from utf16 to utf8
+
             u16 *fileExt = entry->name + size - 4;
             if (memcmp(fileExt, validExtension, 4 * sizeof(u16)))
                 continue;
 
             int units = utf16_to_utf8((u8 *)g_pluginEntries[g_pluginEntryCount],
                                       entry->name, sizeof(g_pluginEntries[0]) - 1);
-            if (units < 0 || (u32)units >= sizeof(g_pluginEntries[0]))
+            if (units < 0 || (u32)units >= sizeof(g_path) - strlen(g_path))
                 continue;
             g_pluginEntries[g_pluginEntryCount][units] = 0;
             ++g_pluginEntryCount;
@@ -344,13 +349,14 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
 
     havePinned = LoadSelection(pinned, sizeof(pinned));
 
-    menuEnter();
+    if (!menuEnterWhenClosed())
+        return false;
 
     do
     {
         Draw_Lock();
         Draw_ClearFramebuffer();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Plugin selector");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("プラグインの選択", "Plugin selector"));
         Draw_DrawString(10, 30, COLOR_WHITE, Lang(STR_A_USE_X_PIN_UNPIN_B_NONE));
 
         if (cursor >= 0)
@@ -364,12 +370,11 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
         u32 posY = 50;
         for (u32 i = first; i < g_pluginEntryCount && i < first + SELECTOR_ROWS; ++i)
         {
-            char    name[SELECTOR_NAME_WIDTH + 1];
+            char    name[DRAW_TEXT_SIZE(SELECTOR_NAME_WIDTH)];
             char    line[sizeof(name) + 2];
             u32     color;
 
-            strncpy(name, g_pluginEntries[i], sizeof(name) - 1);
-            name[sizeof(name) - 1] = 0;
+            Draw_ClipText(name, sizeof(name), g_pluginEntries[i], SELECTOR_NAME_WIDTH);
 
             if (!g_pluginEntryOk[i])
                 color = COLOR_GRAY;
@@ -382,7 +387,7 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
             Draw_DrawString(10, posY, color, line);
             posY += SPACING_Y;
         }
-        Draw_DrawScrollMarks(50, SELECTOR_ROWS, first, g_pluginEntryCount, g_cursorColor);
+        Draw_DrawScrollMarks(50, SELECTOR_ROWS, first, g_pluginEntryCount, COLOR_TITLE);
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -396,6 +401,17 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
             cursor = NextLoadableEntry(cursor, 1);
         else if (keys & BUTTON_UP)
             cursor = NextLoadableEntry(cursor, -1);
+        else if (keys & (BUTTON_LEFT | BUTTON_RIGHT))
+        {
+            // 1 画面（SELECTOR_ROWS 行）ずつ動かす。読み込めない（灰色の）項目には止まらない
+            bool forward = (keys & BUTTON_RIGHT) != 0;
+            s32 firstOk = NextLoadableEntry(g_pluginEntryCount - 1, 1);
+            s32 lastOk = NextLoadableEntry(0, -1);
+
+            cursor = menuPageMove(cursor, firstOk, lastOk, SELECTOR_ROWS, forward);
+            while (!g_pluginEntryOk[cursor])
+                cursor += forward ? 1 : -1;
+        }
         else if (keys & BUTTON_A)
         {
             if (cursor < 0)
@@ -435,22 +451,25 @@ static bool     ShowPluginSelector(char *outName, u32 outSize)
     return false;
 }
 
-static bool     ResolvePluginPath(u64 tid)
+// *declined は、セレクターで何も選ばれなかった（B で「使わない」を選んだ、
+// またはセレクターを表示できなかった）ときに true
+static bool     ResolvePluginPath(u64 tid, bool *declined)
 {
     char    chosen[256];
     char    saved[256];
     bool    haveChoice = false;
     u32     heldKeys;
 
-    if (R_FAILED(EnumeratePluginFiles(tid)) || g_pluginEntryCount == 0)
-        return false;
+    *declined = false;
 
-    if (g_pluginEntryOkCount == 0)
+    if (R_FAILED(EnumeratePluginFiles(tid)) || g_pluginEntryCount == 0)
         return false;
 
     heldKeys = HID_PAD;
 
-    if (g_pluginEntryOkCount == 1 && g_pluginEntryCount == 1)
+    // 1 件だけのときはそれを使う。すべて世代が合わないときは、先頭のファイルを開き、
+    // Check_3gx_Magic() の結果（"Outdated plugin file" など）を表示させる
+    if (g_pluginEntryOkCount == 0 || (g_pluginEntryOkCount == 1 && g_pluginEntryCount == 1))
     {
         strcpy(chosen, g_pluginEntries[0]);
         haveChoice = true;
@@ -480,7 +499,10 @@ static bool     ResolvePluginPath(u64 tid)
         haveChoice = ShowPluginSelector(chosen, sizeof(chosen));
 
     if (!haveChoice)
+    {
+        *declined = true;
         return false;
+    }
 
     strcat(g_path, chosen);
     return true;
@@ -726,16 +748,16 @@ static bool     CheckForDestructivePlugin(IFile *plugin, const _3gx_Header *head
     if (!readFailed && IsHashApproved(hash))
         return true;
 
-    const char  *warningText = risk <= 20 ? "little dangerous" : risk <= 40 ? "moderately dangerous" : "very dangerous";
+    const char  *warningText = Lang(risk <= 20 ? STR_LITTLE_DANGEROUS : risk <= 40 ? STR_MODERATELY_DANGEROUS : STR_VERY_DANGEROUS);
     char        textBuf[64];
     u32         keys;
     bool        result = true;
     bool        details = false;
 
     if (readFailed)
-        sprintf(textBuf, "Could not scan the whole file");
+        sprintf(textBuf, "%s", Lang(STR_COULD_NOT_SCAN_THE_WHOLE_FILE));
     else
-        sprintf(textBuf, "Risk : %u%% (%s)", (unsigned)risk, warningText);
+        sprintf(textBuf, Lang(STR_RISK), (unsigned)risk, warningText);
 
     char matched[256];
     matched[0] = 0;
@@ -751,9 +773,10 @@ static bool     CheckForDestructivePlugin(IFile *plugin, const _3gx_Header *head
     }
 
     if (matched[0] == 0)
-        strcat(matched, "(none)");
+        strcat(matched, Lang(STR_NONE));
 
-    menuEnter();
+    if (!menuEnterWhenClosed())
+        return false;
 
     do
     {
@@ -767,18 +790,17 @@ static bool     CheckForDestructivePlugin(IFile *plugin, const _3gx_Header *head
         }
         else
         {
-            Draw_DrawString(10, 10, COLOR_RED, "--- KEIKOKU / WARNING ---");
-            u32 posY = readFailed
-                ? Draw_DrawBilingual(30, 30, COLOR_WHITE, "Kono 3gx wa saigo made kensa dekimasen",
-                                     "This 3gx could not be fully checked")
-                : Draw_DrawBilingual(30, 30, COLOR_WHITE, "Kono 3gx wa hakaiteki kamo shiremasen",
-                                     "This 3gx may be a destructive plugin");
+            Draw_DrawString(10, 10, COLOR_RED, TR("--- 警告 ---", "--- WARNING ---"));
+            u32 posY = Draw_DrawString(30, 30, COLOR_WHITE, readFailed
+                ? TR("この 3gx は最後まで検査できません", "This 3gx could not be fully checked")
+                : TR("この 3gx は破壊的かもしれません", "This 3gx may be destructive"));
             posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, textBuf);
-            posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, "Matched keywords:");
+            posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, Lang(STR_MATCHED_KEYWORDS));
             posY = Draw_DrawString(30, posY + SPACING_Y, COLOR_YELLOW, matched);
-            Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE, "X: basho wo hyouji / show where found");
-            Draw_DrawString(10, 205, COLOR_WHITE, "A: sonomama tsukau / use anyway");
-            Draw_DrawString(10, 216, COLOR_WHITE, "B: tsukawanai / don't use it");
+            Draw_DrawString(30, posY + SPACING_Y, COLOR_WHITE,
+                            TR("X: 場所を表示", "X: show the locations"));
+            Draw_DrawString(10, 205, COLOR_WHITE, TR("A: そのまま使う", "A: use it anyway"));
+            Draw_DrawString(10, 216, COLOR_WHITE, TR("B: 使わない", "B: do not use it"));
         }
 
         Draw_FlushFramebuffer();
@@ -804,7 +826,7 @@ static bool     CheckForDestructivePlugin(IFile *plugin, const _3gx_Header *head
 
 static Result   OpenFile(IFile *file, const char *path)
 {
-    return IFile_Open(file, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), fsMakePath(PATH_ASCII, path), FS_OPEN_READ);
+    return IFile_Open(file, ARCHIVE_SDMC, fsMakePath(PATH_EMPTY, ""), IFile_MakeUtf8Path(g_utf16Path, path), FS_OPEN_READ);
 }
 
 static Result   CheckPluginCompatibility(_3gx_Header *header, u32 processTitle)
@@ -842,13 +864,14 @@ static bool     TryToLoadPlugin(Handle process)
     PluginHeader    *hdr = (PluginHeader *)g_memBlock;
     _3gx_Header     *header;
     Result  res;
+    bool    declined = false;
 
-    
+    // Clear the memblock
     memset32(g_memBlock, 0, MemBlockSize);
 
     hdr->magic = HeaderMagic;
 
-    
+    // Get title id
     svcGetProcessInfo((s64 *)&tid, process, 0x10001);
     if (R_FAILED((res = svcMapProcessMemoryEx(CUR_PROCESS_HANDLE, procStart, process, procStart, 0x1000))))
     {
@@ -857,7 +880,7 @@ static bool     TryToLoadPlugin(Handle process)
         return false;
     }
 
-    
+    // Try to open plugin file
     if (g_userDefinedLoadParameters.isEnabled && (u32)tid == g_userDefinedLoadParameters.titleid)
     {
         g_userDefinedLoadParameters.isEnabled = false;
@@ -868,9 +891,13 @@ static bool     TryToLoadPlugin(Handle process)
     }
     else
     {
-        if (!ResolvePluginPath(tid) || OpenFile(&plugin, g_path))
+        if (!ResolvePluginPath(tid, &declined) || OpenFile(&plugin, g_path))
         {
-            
+            // セレクターで「使わない」を選んだときは default.3gx にも切り替えない
+            if (declined)
+                goto exitFail;
+
+            // Try to open default plugin
             const char *defaultPath = "/luma/plugins/default.3gx";
             if (OpenFile(&plugin, defaultPath))
                 goto exitFail;
@@ -884,7 +911,7 @@ static bool     TryToLoadPlugin(Handle process)
     if (R_FAILED((res = IFile_GetSize(&plugin, &fileSize))))
         g_error.message = "Couldn't get file size";
 
-    
+    // Plugins will rarely exceed 1MB so this is fine
     header = (_3gx_Header *)(g_memBlock + MemBlockSize - (u32)fileSize);
 
     
@@ -902,10 +929,11 @@ static bool     TryToLoadPlugin(Handle process)
     }
 
     
+    // Read header
     if (!res && R_FAILED((res = Read_3gx_Header(&plugin, header))))
         g_error.message = "Couldn't read file";
 
-    
+    // Check titles compatibility
     if (!res) res = CheckPluginCompatibility(header, (u32)tid);
 
     if (!res && !CheckForDestructivePlugin(&plugin, header, fileSize))
@@ -915,10 +943,11 @@ static bool     TryToLoadPlugin(Handle process)
     }
 
     
+    // Read code
     if (!res && R_FAILED(res = Read_3gx_Code(&plugin, header, g_memBlock + sizeof(PluginHeader))))
         g_error.message = "Couldn't read plugin's code";
 
-    
+    // Close file
     IFile_Close(&plugin);
     if (R_FAILED(res))
     {
@@ -927,11 +956,11 @@ static bool     TryToLoadPlugin(Handle process)
     }
 
     hdr->version = header->version;
-    
+    // Code size must be page aligned
     fileSize = (header->codeSize + 0x1100) & ~0xFFF;
 
     if (MapPluginInProcess(process, fileSize) == 0)
-    
+    // Install hook
     {
         extern u32  g_savedGameInstr[2];
         u32  *game = (u32 *)procStart;
@@ -939,7 +968,7 @@ static bool     TryToLoadPlugin(Handle process)
         g_savedGameInstr[0] = game[0];
         g_savedGameInstr[1] = game[1];
 
-        game[0] = 0xE51FF004; 
+        game[0] = 0xE51FF004; // ldr pc, [pc, #-4]
         game[1] = (u32)PA_FROM_VA_PTR(gamePatchFunc);
     }
     else
@@ -966,7 +995,7 @@ static void     PluginLoader_HandleCommands(void)
 
     switch (cmdbuf[0] >> 16)
     {
-        case 1: 
+        case 1: // Load plugin
         {
             if (cmdbuf[0] != IPC_MakeHeader(1, 0, 2))
             {
@@ -1000,7 +1029,7 @@ static void     PluginLoader_HandleCommands(void)
             break;
         }
 
-        case 2: 
+        case 2: // Check if plugin loader is enabled
         {
             if (cmdbuf[0] != IPC_MakeHeader(2, 0, 0))
             {
@@ -1014,7 +1043,7 @@ static void     PluginLoader_HandleCommands(void)
             break;
         }
 
-        case 3: 
+        case 3: // Enable / Disable plugin loader
         {
             if (cmdbuf[0] != IPC_MakeHeader(3, 1, 0))
             {
@@ -1033,7 +1062,7 @@ static void     PluginLoader_HandleCommands(void)
             break;
         }
 
-        case 4: 
+        case 4: // Define next plugin load settings
         {
             if (cmdbuf[0] != IPC_MakeHeader(4, 2, 4))
             {
@@ -1052,7 +1081,7 @@ static void     PluginLoader_HandleCommands(void)
             break;
         }
 
-        case 5: 
+        case 5: // Display menu
         {
             if (cmdbuf[0] != IPC_MakeHeader(5, 1, 8))
             {
@@ -1071,7 +1100,7 @@ static void     PluginLoader_HandleCommands(void)
             break;
         }
 
-        case 6: 
+        case 6: // Display message
         {
             if (cmdbuf[0] != IPC_MakeHeader(6, 0, 4))
             {
@@ -1089,7 +1118,7 @@ static void     PluginLoader_HandleCommands(void)
             break;
         }
 
-        case 7: 
+        case 7: // Display error message
         {
             if (cmdbuf[0] != IPC_MakeHeader(7, 1, 4))
             {
@@ -1111,7 +1140,7 @@ static void     PluginLoader_HandleCommands(void)
 
 void        PluginLoader__ThreadMain(void)
 {
-    const char *title = "Plugin loader";
+    const char *title = "プラグインローダー";
 
     Result  res = 0;
     MemOp   memRegion = isN3DS ? MEMOP_REGION_BASE : MEMOP_REGION_SYSTEM;
@@ -1123,7 +1152,7 @@ void        PluginLoader__ThreadMain(void)
     u32 nbHandle;
     s32 index;
 
-    
+    // Wait for the system to be completely started
     {
         bool isAcuRegistered = false;
 
@@ -1136,11 +1165,13 @@ void        PluginLoader__ThreadMain(void)
         }
     }
 
+    // Init memory block to hold the plugin
+
     
     if (R_FAILED((res = svcControlMemoryEx((u32 *)&g_memBlock, 0x07000000, 0, MemBlockSize, memRegion | MEMOP_ALLOC, MEMPERM_RW, true))))
     {
         g_memBlock = NULL;
-        svcSleepThread(5000000000ULL);
+            svcSleepThread(5000000000ULL); ///< Wait until the system started to display the error
         DispErrMessage(title, "Couldn't allocate memblock", res);
     }
 
@@ -1154,7 +1185,7 @@ void        PluginLoader__ThreadMain(void)
         handles[1] = sessionHandle == 0 ? g_process : sessionHandle;
         handles[2] = g_process;
 
-        if(replyTarget == 0) 
+        if(replyTarget == 0) // k11
             cmdbuf[0] = 0xFFFF0000;
 
         nbHandle = 1 + (sessionHandle != 0) + (g_process != 0);
@@ -1162,7 +1193,7 @@ void        PluginLoader__ThreadMain(void)
 
         if(R_FAILED(res))
         {
-            if((u32)res == 0xC920181A) 
+            if((u32)res == 0xC920181A) // session closed by remote
             {
                 svcCloseHandle(sessionHandle);
                 sessionHandle = 0;
@@ -1188,9 +1219,9 @@ void        PluginLoader__ThreadMain(void)
                 PluginLoader_HandleCommands();
                 replyTarget = sessionHandle;
             }
-            else 
+            else ///< The process in which we injected the plugin is terminating
             {
-                
+                // Unmap plugin's memory before closing the process
                 svcUnmapProcessMemoryEx(g_process, 0x07000000, g_codeSize);
                 svcUnmapProcessMemoryEx(g_process, 0x06000000, g_heapSize);
                 svcCloseHandle(g_process);

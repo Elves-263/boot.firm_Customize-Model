@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Code originally by reworks
+*/
 
 #include "draw.h"
 #include "config.h"
@@ -35,6 +37,7 @@
 #include "fs.h"
 #include "pin.h"
 #include "crypto.h"
+#include "lang.h"
 
 static char pinKeyToLetter(u32 pressed)
 {
@@ -52,12 +55,12 @@ void newPin(bool allowSkipping, u32 pinMode)
 
     u8 length = 4 + 2 * (pinMode - 1);
 
-    drawString(true, 10, 10, COLOR_TITLE, "Enter a new PIN using ABXY and the DPad");
-    drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, allowSkipping ? "Press START to skip, SELECT to reset" : "Press SELECT to reset");
+    drawString(true, 10, 10, COLOR_TITLE, TR("ABXY と十字キーで、新しい PIN を入力してください", "Enter a new PIN using ABXY and the DPad"));
+    drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, allowSkipping ? TR("START: 飛ばす   SELECT: やり直す", "Press START to skip, SELECT to reset") : TR("SELECT: やり直す", "Press SELECT to reset"));
 
-    drawFormattedString(true, 10, 10 + 3 * SPACING_Y, COLOR_WHITE, "PIN (%u digits): ", length);
+    drawFormattedString(true, 10, 10 + 3 * SPACING_Y, COLOR_WHITE, TR("PIN（%u 桁）: ", "PIN (%u digits): "), length);
 
-    
+    //Pad to AES block length with zeroes
     __attribute__((aligned(4))) u8 enteredPassword[AES_BLOCK_SIZE] = {0};
 
     bool reset = false;
@@ -94,10 +97,10 @@ void newPin(bool allowSkipping, u32 pinMode)
 
         if(!pressed) continue;
 
-        
+        //Add character to password
         enteredPassword[cnt] = (u8)pinKeyToLetter(pressed);
 
-        
+        //Visualize character on screen
         drawCharacter(true, 10 + (16 + 2 * cnt) * SPACING_X, 10 + 3 * SPACING_Y, COLOR_WHITE, enteredPassword[cnt]);
 
         cnt++;
@@ -146,10 +149,10 @@ bool verifyPin(u32 pinMode)
 
     swapFramebuffers(true);
 
-    drawString(true, 10, 10, COLOR_TITLE, "Enter the PIN using ABXY and the DPad to proceed");
-    drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, "Press START to shutdown, SELECT to clear");
+    drawString(true, 10, 10, COLOR_TITLE, TR("続けるには、ABXY と十字キーで PIN を入力してください", "Enter the PIN using ABXY and the DPad to proceed"));
+    drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, TR("START: 電源を切る   SELECT: 消す", "Press START to shutdown, SELECT to clear"));
 
-    drawFormattedString(true, 10, 10 + 3 * SPACING_Y, COLOR_WHITE, "PIN (%u digits): ", lengthBlock[0]);
+    drawFormattedString(true, 10, 10 + 3 * SPACING_Y, COLOR_WHITE, TR("PIN（%u 桁）: ", "PIN (%u digits): "), lengthBlock[0]);
 
     bool isBottomSplashValid = getFileSize("splashpin.bin") == SCREEN_BOTTOM_FBSIZE;
     if(isBottomSplashValid)
@@ -171,7 +174,7 @@ bool verifyPin(u32 pinMode)
     }
     swapFramebuffers(false);
 
-    
+    //Pad to AES block length with zeroes
     __attribute__((aligned(4))) u8 enteredPassword[AES_BLOCK_SIZE] = {0};
 
     bool unlock = false,
@@ -208,10 +211,10 @@ bool verifyPin(u32 pinMode)
 
         if(!pressed) continue;
 
-        
+        //Add character to password
         enteredPassword[cnt] = (u8)pinKeyToLetter(pressed);
 
-        
+        //Visualize character on screen
         drawCharacter(true, 10 + (16 + 2 * cnt) * SPACING_X, 10 + 3 * SPACING_Y, COLOR_WHITE, '*');
 
         if(++cnt < lengthBlock[0]) continue;

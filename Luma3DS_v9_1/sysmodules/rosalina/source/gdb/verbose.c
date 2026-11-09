@@ -41,7 +41,7 @@ static const struct
 
 GDB_DECLARE_HANDLER(VerboseCommand)
 {
-    char *nameBegin = ctx->commandData; 
+    char *nameBegin = ctx->commandData; // w/o leading 'v'
     if(*nameBegin == 0)
         return GDB_ReplyErrno(ctx, EILSEQ);
 
@@ -64,7 +64,7 @@ GDB_DECLARE_HANDLER(VerboseCommand)
         }
     }
 
-    return GDB_HandleUnsupported(ctx); 
+    return GDB_HandleUnsupported(ctx); // No handler found!
 }
 
 GDB_DECLARE_VERBOSE_HANDLER(ContinueSupported)

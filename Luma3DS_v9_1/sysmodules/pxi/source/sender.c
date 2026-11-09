@@ -32,13 +32,13 @@ Result sendPXICmdbuf(Handle *additionalHandle, u32 serviceId, u32 *buffer)
             cancelled = false;
 
         if(cancelled)
-            return 0xD92043FB; 
+            return 0xD92043FB; // cancel requested
     }
     else
         assertSuccess(svcWaitSynchronization(PXITransferMutex, -1LL));
 
     PXISendWord(serviceId & 0xFF);
-    PXITriggerSync9IRQ(); 
+    PXITriggerSync9IRQ(); //notify arm9
     PXISendBuffer(buffer, (buffer[0] & 0x3F) + ((buffer[0] & 0xFC0) >> 6) + 1);
 
     svcReleaseMutex(PXITransferMutex);
@@ -94,13 +94,13 @@ void sender(void)
     u32 posToServiceId[9] = {0};
     RecursiveLock_Lock(&sessionManager.senderLock);
 
-    
+    //Setting static buffers is needed for IPC translation types 2 and 3 (otherwise ReplyAndReceive will dereference NULL)
     sessionManager.freeStaticBuffers = (1 << NB_STATIC_BUFFERS) - 1;
     acquireStaticBuffers();
 
     do
     {
-        if(replyTarget == 0) 
+        if(replyTarget == 0) //send to arm9
         {
             for(u32 i = 0; i < 9; i++)
             {
@@ -126,7 +126,7 @@ void sender(void)
                     goto terminate;
 
             }
-            cmdbuf[0] = 0xFFFF0000; 
+            cmdbuf[0] = 0xFFFF0000; //Kernel11
         }
 
         nbIdleSessions = 0;
@@ -143,7 +143,7 @@ void sender(void)
         res = svcReplyAndReceive(&index, handles, 3 + nbIdleSessions, replyTarget);
         RecursiveLock_Lock(&sessionManager.senderLock);
 
-        if((u32)res == 0xC920181A) 
+        if((u32)res == 0xC920181A) //session closed by remote
         {
             u32 i;
 
@@ -165,14 +165,14 @@ void sender(void)
 
         switch(index)
         {
-            case 0: 
+            case 0: //terminaton requested
                 break;
 
             case 1:
                 replyTarget = 0;
                 continue;
 
-            case 2: 
+            case 2: //arm9 reply
             {
                 u32 sessionId = 0;
                 for(sessionId = 0; sessionId < 9 && sessionManager.sessionData[sessionId].state != STATE_RECEIVED_FROM_ARM9; sessionId++);
@@ -202,7 +202,7 @@ void sender(void)
                 break;
             }
 
-            default: 
+            default: //arm11 command received
             {
                 u32 serviceId = posToServiceId[index - 3];
                 SessionData *data = &sessionManager.sessionData[serviceId];
@@ -210,7 +210,7 @@ void sender(void)
 
                 if(data->state != STATE_IDLE) svcBreak(USERBREAK_PANIC);
 
-                if(!(serviceId == 0 && (cmdbuf[0] >> 16) == 5)) 
+                if(!(serviceId == 0 && (cmdbuf[0] >> 16) == 5)) //if not pxi:mc 5
                     sessionManager.latest_PXI_MC5_val = 0;
                 else if((u8)(cmdbuf[1]) != 0)
                 {
@@ -254,7 +254,7 @@ terminate:
 
 void PXISRV11Handler(void)
 {
-    
+    // Assumption: only 1 request is sent to this service at a time
     Handle handles[] = {sessionManager.PXISRV11CommandReceivedEvent, terminationRequestedEvent};
     SessionData *data = &sessionManager.sessionData[9];
 
@@ -279,7 +279,7 @@ void PXISRV11Handler(void)
             if(data->buffer[0] >> 16 != 1)
             {
                 data->buffer[0] = 0x40;
-                data->buffer[1] = 0xD900182F; 
+                data->buffer[1] = 0xD900182F; //unimplemented/invalid command
             }
             else
             {

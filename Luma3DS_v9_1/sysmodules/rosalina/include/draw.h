@@ -50,8 +50,7 @@
 #define GPU_TRANSFER_CNT            REG32(0x10400C18)
 #define GPU_CMDLIST_CNT             REG32(0x104018F0)
 
-#define FB_BOTTOM_VRAM_ADDR         ((void *)0x1F48F000) 
-extern u16 g_menuBgColor;
+#define FB_BOTTOM_VRAM_ADDR         ((void *)0x1F48F000) // cached
 #define FB_BOTTOM_VRAM_PA           0x1848F000
 #define FB_BOTTOM_SIZE              (320 * 240 * 2)
 
@@ -79,13 +78,29 @@ void Draw_Unlock(void);
 void Draw_DrawCharacter(u32 posX, u32 posY, u32 color, char character);
 u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string);
 u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...);
-u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *romaji, const char *english);
+u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *kanji, const char *english);
 void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color);
+
+// 文字列は UTF-8 で、日本語の字（font_jp.c）は全角が 2 桁、半角カナが 1 桁。
+// 字形の無い字は ? の 1 桁、UTF-8 として正しくないバイトはそのバイトの字（CP437）の 1 桁
+#define DRAW_TEXT_SIZE(cols) ((cols) * 3 + 1)   // cols 桁の文字列に要るバイト数（終端を含む）
+
+// 画面の桁数
+u32 Draw_TextColumns(const char *s);
+// src を cols 桁・dstSize バイト（終端を含む）に収まるように、字の途中で切らずに写し、使った桁数を
+// 返す。描けない字は ? にする（ファイル名など、外から来た文字列を出すときに使う）。dst と src は同じでもよい
+u32 Draw_ClipText(char *dst, u32 dstSize, const char *src, u32 cols);
+// s を cols 桁に収まるように、字の途中で切らずに短くする（字は置き換えない）
+void Draw_CutText(char *s, u32 cols);
+// s の末尾のうち、cols 桁に収まる一番長い部分
+const char *Draw_TextTail(const char *s, u32 cols);
 
 void Draw_FillFramebuffer(u32 value);
 void Draw_ClearFramebuffer(void);
 void Draw_SetupFramebuffer(void);
 void Draw_RestoreFramebuffer(void);
+Result Draw_AllocateFramebufferCache(void);
+void Draw_FreeFramebufferCache(void);
 void Draw_FlushFramebuffer(void);
 u32 Draw_GetCurrentFramebufferAddress(bool top, bool left);
 

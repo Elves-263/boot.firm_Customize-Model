@@ -24,13 +24,18 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Crypto libs from http://github.com/b1l1s/ctr
+*   kernel9Loader code originally adapted from https://github.com/Reisyukaku/ReiNand/blob/228c378255ba693133dec6f3368e14d386f2cde7/source/crypto.c#L233
+*   decryptNusFirm code adapted from https://github.com/mid-kid/CakesForeveryWan/blob/master/source/firm.c
+*   ctrNandWrite logic adapted from https://github.com/d0k3/GodMode9/blob/master/source/nand/nand.c
+*/
 
 #pragma once
 
 #include "types.h"
 
- 
+/**************************AES****************************/
 #define REG_AESCNT          ((vu32 *)0x10009000)
 #define REG_AESBLKCNT       ((vu32 *)0x10009004)
 #define REG_AESWRFIFO       ((vu32 *)0x10009008)
@@ -77,7 +82,7 @@
 #define AES_KEYX        1
 #define AES_KEYY        2
 
- 
+/**************************SHA****************************/
 #define REG_SHA_CNT         ((vu32 *)0x1000A000)
 #define REG_SHA_BLKCNT      ((vu32 *)0x1000A004)
 #define REG_SHA_HASH        ((vu32 *)0x1000A040)

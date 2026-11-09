@@ -28,7 +28,7 @@
 
 #include "gdb.h"
 
-
+// We'll actually use SVC 0xFF for breakpoints :P
 #define BREAKPOINT_INSTRUCTION_ARM      0xEF0000FF
 #define BREAKPOINT_INSTRUCTION_THUMB    0xDFFF
 

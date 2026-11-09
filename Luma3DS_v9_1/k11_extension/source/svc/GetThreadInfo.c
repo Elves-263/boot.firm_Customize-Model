@@ -31,7 +31,7 @@ Result GetThreadInfoHook(s64 *out, Handle threadHandle, u32 type)
 {
     Result res = 0;
 
-    if(type == 0x10000) 
+    if(type == 0x10000) // Get TLS
     {
         KProcessHandleTable *handleTable = handleTableOfProcess(currentCoreContext->objectContext.currentProcess);
         KThread *thread;
@@ -45,7 +45,7 @@ Result GetThreadInfoHook(s64 *out, Handle threadHandle, u32 type)
             thread = KProcessHandleTable__ToKThread(handleTable, threadHandle);
 
         if(thread == NULL)
-            return 0xD8E007F7; 
+            return 0xD8E007F7; // invalid handle
 
         *out = (s64)(u64)(u32)thread->threadLocalStorage;
 

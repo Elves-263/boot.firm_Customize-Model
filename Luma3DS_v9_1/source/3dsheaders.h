@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Adapted from 3DBrew and https://github.com/mid-kid/CakesForeveryWan/blob/master/source/headers.h
+*/
 
 #pragma once
 
@@ -69,35 +71,35 @@ typedef struct __attribute__((packed))
 
 typedef struct __attribute__((packed))
 {
-    u8 sig[0x100]; 
-    char magic[4]; 
-    u32 contentSize; 
+    u8 sig[0x100]; //RSA-2048 signature of the NCCH header, using SHA-256
+    char magic[4]; //NCCH
+    u32 contentSize; //Media unit
     u8 partitionId[8];
     u8 makerCode[2];
     u16 version;
     u8 reserved1[4];
     u8 programID[8];
     u8 reserved2[0x10];
-    u8 logoHash[0x20]; 
+    u8 logoHash[0x20]; //Logo Region SHA-256 hash
     char productCode[0x10];
-    u8 exHeaderHash[0x20]; 
-    u32 exHeaderSize; 
+    u8 exHeaderHash[0x20]; //Extended header SHA-256 hash
+    u32 exHeaderSize; //Extended header size
     u32 reserved3;
     u8 flags[8];
-    u32 plainOffset; 
-    u32 plainSize; 
-    u32 logoOffset; 
-    u32 logoSize; 
-    u32 exeFsOffset; 
-    u32 exeFsSize; 
-    u32 exeFsHashSize; 
+    u32 plainOffset; //Media unit
+    u32 plainSize; //Media unit
+    u32 logoOffset; //Media unit
+    u32 logoSize; //Media unit
+    u32 exeFsOffset; //Media unit
+    u32 exeFsSize; //Media unit
+    u32 exeFsHashSize; //Media unit
     u32 reserved4;
-    u32 romFsOffset; 
-    u32 romFsSize; 
-    u32 romFsHashSize; 
+    u32 romFsOffset; //Media unit
+    u32 romFsSize; //Media unit
+    u32 romFsHashSize; //Media unit
     u32 reserved5;
-    u8 exeFsHash[0x20]; 
-    u8 romFsHash[0x20]; 
+    u8 exeFsHash[0x20]; //ExeFS superblock SHA-256 hash
+    u8 romFsHash[0x20]; //RomFS superblock SHA-256 hash
 } Ncch;
 
 typedef struct __attribute__((packed))
@@ -122,9 +124,9 @@ typedef struct __attribute__((packed))
     u16 ticketTitleVersion;
     u8 reserved3[8];
     u8 licenseType;
-    u8 ticketCommonKeyYIndex; 
+    u8 ticketCommonKeyYIndex; //Ticket common keyY index, usually 0x1 for retail system titles.
     u8 reserved4[0x2A];
-    u8 unk[4]; 
+    u8 unk[4]; //eShop Account ID?
     u8 reserved5;
     u8 audit;
     u8 reserved6[0x42];

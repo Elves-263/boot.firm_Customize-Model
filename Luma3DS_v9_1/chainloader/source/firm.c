@@ -32,7 +32,7 @@ void disableMpuAndJumpToEntrypoints(int argc, char **argv, void *arm11Entry, voi
 
 void launchFirm(Firm *firm, int argc, char **argv)
 {
-    
+    //Copy FIRM sections to respective memory locations
     for(u32 sectionNum = 0; sectionNum < 4; sectionNum++)
         memcpy(firm->section[sectionNum].address, (u8 *)firm + firm->section[sectionNum].offset, firm->section[sectionNum].size);
 

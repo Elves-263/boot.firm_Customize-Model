@@ -24,7 +24,10 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Screen init code by dark_samus, bil1s, Normmatt, delebile and others
+*   Screen deinit code by tiniVi
+*/
 
 #include "screen.h"
 #include "config.h"
@@ -99,7 +102,7 @@ void initScreens(void)
             memcpy((void *)(ARM11_PARAMETERS_ADDRESS + 4), fbs, sizeof(fbs));
             invokeArm11Function(INIT_SCREENS);
 
-            
+            //Turn on backlight
             i2cWriteRegister(I2C_DEV_MCU, 0x22, 0x2A);
         }
         else updateBrightness(MULTICONFIG(BRIGHTNESS));

@@ -37,8 +37,11 @@
 #include "menus/process_patches.h"
 #include "menus/miscellaneous.h"
 #include "plgloader.h"
+#include "menus/ftpd.h"
+#include "update_check.h"
+#include "menus/lang.h"
 
-
+// this is called before main
 bool isN3DS;
 void __appInit()
 {
@@ -48,7 +51,7 @@ void __appInit()
     fsSysInit();
 }
 
-
+// this is called after main exits
 void __appExit()
 {
     acExit();
@@ -68,7 +71,7 @@ void __ctru_exit()
     __appExit();
     __sync_fini();
     __libc_fini_array();
-    for(;;) svcSleepThread(0); 
+    for(;;) svcSleepThread(0); // kernel-loaded sysmodules except PXI are not supposed to terminate anyways
     svcExitProcess();
 }
 
@@ -86,22 +89,22 @@ void initSystem()
     svcGetSystemInfo(&out, 0x10000, 0x101);
     menuCombo = out == 0 ? DEFAULT_MENU_COMBO : (u32)out;
 
-    miscellaneousMenu.items[0].title = HBLDR_3DSX_TID == HBLDR_DEFAULT_3DSX_TID ? "Switch the hb. title to the current app." :
-                                                                                  "Switch the hb. title to hblauncher_loader";
+    miscellaneousMenu.items[0].title = HBLDR_3DSX_TID == HBLDR_DEFAULT_3DSX_TID ? TR("hb. 用タイトルを今のアプリにする", "Switch the hb. title to the current app.") :
+                                                                                  TR("hb. 用タイトルを hblauncher_loader にする", "Switch the hb. title to hblauncher_loader");
 
     ProcessPatchesMenu_PatchUnpatchFSDirectly();
     __sync_init();
     __appInit();
 
-    
-    
+    // ROSALINA HACKJOB BEGIN
+    // NORMAL APPS SHOULD NOT DO THIS, EVER
     u32 *tls = (u32 *)getThreadLocalStorage();
     memset(tls, 0, 0x80);
     tls[0] = 0x21545624;
-    
+    // ROSALINA HACKJOB END
 
-    
-    srvSetBlockingPolicy(true); 
+    // Rosalina specific:
+    srvSetBlockingPolicy(true); // GetServiceHandle nonblocking if service port is full
 }
 
 bool terminationRequest = false;
@@ -122,6 +125,8 @@ int main(void)
 
     if ((HID_PAD & 0x301) == 0x301) g_safeMode = true;
     Sleep__Init();
+    if (!g_safeMode)
+        updateCheckCreateThread();
 
     do
     {
@@ -137,7 +142,7 @@ int main(void)
 
         if(notifId == 0x100)
         {
-            
+            // Termination request
             terminationRequest = true;
             svcSignalEvent(terminationRequestEvent);
         }
@@ -145,6 +150,9 @@ int main(void)
         Sleep__HandleNotification(notifId);
     }
     while(!terminationRequest);
+
+    // FTP サーバーを止めて、ソケットを閉じてから終了する
+    Ftpd_Disable(100 * 1000 * 1000LL);
 
     MyThread_Join(menuThread, -1LL);
     MyThread_Join(errDispThread, -1LL);

@@ -50,7 +50,7 @@ void installArm9Handlers(void)
         *(vu32 *)(0x08000000 + offsets[i] + 4) = *(vu32 *)(0x01FF8008 + 4 * i);
     }
 
-    *(vu32 *)0x01FF8004 = 0; 
+    *(vu32 *)0x01FF8004 = 0; //BreakPtr
 }
 
 void detectAndProcessExceptionDumps(void)

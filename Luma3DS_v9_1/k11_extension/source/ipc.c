@@ -34,7 +34,7 @@ static KRecursiveLock sessionInfosLock = { NULL };
 KRecursiveLock processLangemuLock;
 LangemuAttributes processLangemuAttributes[0x40];
 
-static void *customSessionVtable[0x10] = { NULL }; 
+static void *customSessionVtable[0x10] = { NULL }; // should be enough
 
 static u32 SessionInfo_FindClosestSlot(KSession *session)
 {
@@ -205,7 +205,7 @@ bool doLangEmu(Result *res, u32 *cmdbuf)
         return false;
     }
 
-    if((cmdbuf[0] == 0x20000 || cmdbuf[0] == 0x4060000 || cmdbuf[0] == 0x8160000) && (attribs->mask & 1)) 
+    if((cmdbuf[0] == 0x20000 || cmdbuf[0] == 0x4060000 || cmdbuf[0] == 0x8160000) && (attribs->mask & 1)) // SecureInfoGetRegion
     {
         cmdbuf[0] = (cmdbuf[0] & 0xFFFF0000) | 0x80;
         cmdbuf[1] = 0;
@@ -239,7 +239,7 @@ Result doPublishToProcessHook(Handle handle, u32 *cmdbuf)
 {
     Result res = 0;
     u32 pid;
-    bool terminateRosalina = cmdbuf[1] == 0x100 && cmdbuf[2] == 0; 
+    bool terminateRosalina = cmdbuf[1] == 0x100 && cmdbuf[2] == 0; // cmdbuf[2] to check for well-formed requests
     u32 savedCmdbuf[4];
     memcpy(savedCmdbuf, cmdbuf, 16);
 
@@ -279,10 +279,10 @@ Result doPublishToProcessHook(Handle handle, u32 *cmdbuf)
 
 bool doErrfThrowHook(u32 *cmdbuf)
 {
-    
-    
+    // If fatalErrorInfo->type is "card removed" or "logged", returning from ERRF:Throw is a no-op
+    // for the SDK function
 
-    
+    // r6 (arm) or r4 (thumb) is copied into cmdbuf[1..31]
     u32 *r0_to_r7_r12_usr = (u32 *)((u8 *)currentCoreContext->objectContext.currentThread->endOfThreadContext - 0x110);
     u32 spsr = *(u32 *)((u8 *)currentCoreContext->objectContext.currentThread->endOfThreadContext - 0xCC);
     u8 *srcerrbuf = (u8 *)r0_to_r7_r12_usr[(spsr & 0x20) ? 4 : 6];
@@ -294,10 +294,13 @@ bool doErrfThrowHook(u32 *cmdbuf)
         Result errCode;
     } errorCodesToIgnore[] =
     {
-         
-        
+        /*
+            If you're getting this error, you have broken your head-tracking hardware,
+            and should uncomment the following line:
+        */
+        //{ "qtm", (Result)0xF96183FE },
 
-        { "", 0 }, 
+        { "", 0 }, // impossible case to ensure the array has at least 1 element
     };
 
     for(u32 i = 0; i < sizeof(errorCodesToIgnore) / sizeof(errorCodesToIgnore[0]); i++)

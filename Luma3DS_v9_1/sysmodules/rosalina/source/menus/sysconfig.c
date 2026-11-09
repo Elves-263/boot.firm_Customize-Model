@@ -31,13 +31,14 @@
 #include "fmt.h"
 #include "utils.h"
 #include "ifile.h"
+#include "menus/lang.h"
 
 Menu sysconfigMenu = {
-    "System configuration menu",
+    TR("システム設定", "System configuration menu"),
     .nbItems = 2,
     {
-        { "Toggle LEDs", METHOD, .method = &SysConfigMenu_ToggleLEDs },
-        { "Toggle Wireless", METHOD, .method = &SysConfigMenu_ToggleWireless },
+        { TR("LED の入／切", "Toggle LEDs"), METHOD, .method = &SysConfigMenu_ToggleLEDs },
+        { TR("無線の入／切", "Toggle Wireless"), METHOD, .method = &SysConfigMenu_ToggleWireless },
     }
 };
 
@@ -51,11 +52,11 @@ void SysConfigMenu_ToggleLEDs(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "System configuration menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to toggle, press B to go back.");
-        Draw_DrawString(10, 50, COLOR_RED, "WARNING:");
-        Draw_DrawString(10, 60, COLOR_WHITE, "  * Entering sleep mode will reset the LED state!");
-        Draw_DrawString(10, 70, COLOR_WHITE, "  * LEDs cannot be toggled when the battery is low!");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("システム設定", "System configuration menu"));
+        Draw_DrawString(10, 30, COLOR_WHITE, TR("A: 切り替え   B: 戻る", "A: switch   B: back"));
+        Draw_DrawString(10, 50, COLOR_RED, TR("警告:", "WARNING:"));
+        Draw_DrawString(10, 60, COLOR_WHITE, TR("  * スリープすると LED の状態は元に戻ります。", "  * Entering sleep mode will reset the LED state!"));
+        Draw_DrawString(10, 70, COLOR_WHITE, TR("  * 電池が少ないときは LED を切り替えられません。", "  * LEDs cannot be toggled when the battery is low!"));
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -112,15 +113,15 @@ void SysConfigMenu_ToggleWireless(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "System configuration menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, "Press A to toggle, press B to go back.");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("システム設定", "System configuration menu"));
+        Draw_DrawString(10, 30, COLOR_WHITE, TR("A: 切り替え   B: 戻る", "A: switch   B: back"));
 
         u8 wireless = (*(vu8 *)((0x10140000 | (1u << 31)) + 0x180));
 
         if(nwmRunning)
         {
-            Draw_DrawString(10, 50, COLOR_WHITE, "Current status:");
-            Draw_DrawString(100, 50, (wireless ? COLOR_GREEN : COLOR_RED), (wireless ? " ON " : " OFF"));
+            Draw_DrawString(10, 50, COLOR_WHITE, TR("今の状態:", "Current status:"));
+            Draw_DrawString(100, 50, (wireless ? COLOR_GREEN : COLOR_RED), (wireless ? TR(" オン ", " ON  ") : TR(" オフ ", " OFF ")));
         }
         else
         {

@@ -178,7 +178,7 @@ $(dir_build)/%.bin: $(dir_patches)/%.s
 	armips $<
 
 $(dir_build)/memory.o $(dir_build)/strings.o: CFLAGS += -O3
-$(dir_build)/config.o: CFLAGS += -DCONFIG_TITLE="\"$(name) $(revision) configuration\""
+$(dir_build)/config.o: CFLAGS += -DCONFIG_TITLE="\"$(name) $(revision) configuration\"" -DCONFIG_TITLE_JA="\"$(name) $(revision) の設定\""
 $(dir_build)/patches.o: CFLAGS += -DVERSION_MAJOR="$(version_major)" -DVERSION_MINOR="$(version_minor)"\
 						-DVERSION_BUILD="$(version_build)" -DISRELEASE="$(is_release)" -DCOMMIT_HASH="0x$(commit)"
 $(dir_build)/firm.o: $(dir_build)/modules.bin

@@ -124,7 +124,7 @@ GDB_DECLARE_XFER_OSDATA_HANDLER(Memory)
         int n = GDB_SendStreamData(ctx, ctx->memoryOsInfoXmlData, offset, length, size, false);
 
         if(offset + length >= size)
-            ctx->memoryOsInfoXmlData[0] = 0; 
+            ctx->memoryOsInfoXmlData[0] = 0; // we're done, invalidate
 
         return n;
     }
@@ -187,7 +187,7 @@ GDB_DECLARE_XFER_OSDATA_HANDLER(Processes)
         int n = GDB_SendStreamData(ctx, ctx->processesOsInfoXmlData, offset, length, size, false);
 
         if(offset + length >= size)
-            ctx->processesOsInfoXmlData[0] = 0; 
+            ctx->processesOsInfoXmlData[0] = 0; // we're done, invalidate
 
         return n;
     }

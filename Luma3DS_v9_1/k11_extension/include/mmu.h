@@ -5,12 +5,12 @@
 
 typedef struct
 {
-    u32     bits1_0 : 2;    
+    u32     bits1_0 : 2;    ///< 0b00
 }   Desc_TranslationFault;
 
 typedef struct
 {
-    u32     bits1_0 : 2;    
+    u32     bits1_0 : 2;    ///< 0b01
     u32     sbz     : 3;
     u32     domain  : 4;
     u32     p       : 1;
@@ -19,7 +19,7 @@ typedef struct
 
 typedef struct
 {
-    u32     bits1_0 : 2;    
+    u32     bits1_0 : 2;    ///< 0b10
     u32     b       : 1;
     u32     c       : 1;
     u32     xn      : 1;
@@ -30,14 +30,14 @@ typedef struct
     u32     apx     : 1;
     u32     s       : 1;
     u32     ng      : 1;
-    u32     bit18   : 1;    
+    u32     bit18   : 1;    ///< 0
     u32     sbz     : 1;
     u32     addr    : 12;
 }   Desc_Section;
 
 typedef struct
 {
-    u32     bits1_0 : 2;    
+    u32     bits1_0 : 2;    ///< 0b10
     u32     b       : 1;
     u32     c       : 1;
     u32     xn      : 1;
@@ -46,19 +46,19 @@ typedef struct
     u32     ap      : 2;
     u32     tex     : 3;
     u32     sbz     : 3;
-    u32     bit18   : 1;    
+    u32     bit18   : 1;    ///< 1
     u32     sbz2    : 5;
     u32     addr    : 8;
 }   Desc_Supersection;
 
 typedef struct
 {
-    u32     bits1_0 : 2;    
+    u32     bits1_0 : 2;    ///< 0b11
 }   Desc_Reserved;
 
 typedef struct
 {
-    u32     bits1_0 : 2;    
+    u32     bits1_0 : 2;    ///< 0b01
     u32     b       : 1;
     u32     c       : 1;
     u32     ap      : 2;
@@ -74,7 +74,7 @@ typedef struct
 typedef struct
 {
     u32     xn      : 1;
-    u32     bit1    : 1;    
+    u32     bit1    : 1;    ///< 1
     u32     b       : 1;
     u32     c       : 1;
     u32     ap      : 2;

@@ -47,7 +47,7 @@ GDB_DECLARE_HANDLER(ToggleStopPoint)
     static const WatchpointKind kinds[3] = { WATCHPOINT_WRITE, WATCHPOINT_READ, WATCHPOINT_READWRITE };
     switch(kind)
     {
-        case 0: 
+        case 0: // software breakpoint
             if(size != 2 && size != 4)
                 return GDB_ReplyEmpty(ctx);
             else
@@ -57,7 +57,7 @@ GDB_DECLARE_HANDLER(ToggleStopPoint)
                 return res == 0 ? GDB_ReplyOk(ctx) : GDB_ReplyErrno(ctx, -res);
             }
 
-        
+        // Watchpoints
         case 2:
         case 3:
         case 4:

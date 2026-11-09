@@ -24,7 +24,7 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/* File mainly written by fincs */
 #pragma once
 
 #include <3ds/types.h>

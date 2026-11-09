@@ -28,7 +28,7 @@ Result PXIPM_RegisterProgram(u64 *prog_handle, FS_ProgramInfo *title, FS_Program
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x2,8,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x2,8,0); // 0x20200
   memcpy(&cmdbuf[1], &title->programId, sizeof(u64));
   *(u8 *)&cmdbuf[3] = title->mediaType;
   memcpy(((u8 *)&cmdbuf[3])+1, &title->padding, 7);
@@ -47,7 +47,7 @@ Result PXIPM_GetProgramInfo(exheader_header *exheader, u64 prog_handle)
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x1,2,2); 
+  cmdbuf[0] = IPC_MakeHeader(0x1,2,2); // 0x10082
   cmdbuf[1] = (u32) (prog_handle);
   cmdbuf[2] = (u32) (prog_handle >> 32);
   cmdbuf[3] = (0x400 << 8) | 0x4;
@@ -63,7 +63,7 @@ Result PXIPM_UnregisterProgram(u64 prog_handle)
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x3,2,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x3,2,0); // 0x30080
   cmdbuf[1] = (u32) (prog_handle);
   cmdbuf[2] = (u32) (prog_handle >> 32);
 

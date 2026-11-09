@@ -24,7 +24,10 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Screen init code by dark_samus, bil1s, Normmatt, delebile and others
+*   Screen deinit code by tiniVi
+*/
 
 #pragma once
 

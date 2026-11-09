@@ -34,6 +34,7 @@
 #include "emunand.h"
 #include "buttons.h"
 #include "pin.h"
+#include "lang.h"
 
 CfgData configData;
 ConfigurationStatus needConfig;
@@ -61,7 +62,7 @@ bool readConfig(void)
 
 void writeConfig(bool isConfigOptions)
 {
-    
+    //If the configuration is different from previously, overwrite it.
     if(needConfig != CREATE_CONFIGURATION && ((isConfigOptions && configData.config == oldConfig.config && configData.multiConfig == oldConfig.multiConfig) ||
                                               (!isConfigOptions && configData.bootConfig == oldConfig.bootConfig))) return;
 
@@ -80,122 +81,203 @@ void writeConfig(bool isConfigOptions)
 
 void configMenu(bool oldPinStatus, u32 oldPinMode)
 {
-    static const char *multiOptionsText[]  = { "Default EmuNAND: 1( ) 2( ) 3( ) 4( )",
-                                               "Screen brightness: 4( ) 3( ) 2( ) 1( )",
-                                               "Splash: Off( ) Before( ) After( ) payloads",
-                                               "Splash duration: 1( ) 3( ) 5( ) 7( ) seconds",
-                                               "PIN lock: Off( ) 4( ) 6( ) 8( ) digits",
-                                               "New 3DS CPU: Off( ) Clock( ) L2( ) Clock+L2( )",
-                                             };
+    // 言語は起動のたびに決まるので、表は static にしない（TR() は実行するときに選ぶ）
+    // ( ) の中に x を描く。日本語の文でも ( ) は半角で書く
+    const char *multiOptionsText[]  = { TR("標準の EmuNAND: 1( ) 2( ) 3( ) 4( )", "Default EmuNAND: 1( ) 2( ) 3( ) 4( )"),
+                                        TR("画面の明るさ: 4( ) 3( ) 2( ) 1( )", "Screen brightness: 4( ) 3( ) 2( ) 1( )"),
+                                        TR("スプラッシュ: なし( ) ペイロードの前( ) 後( )", "Splash: Off( ) Before( ) After( ) payloads"),
+                                        TR("スプラッシュの時間: 1( ) 3( ) 5( ) 7( ) 秒", "Splash duration: 1( ) 3( ) 5( ) 7( ) seconds"),
+                                        TR("PIN ロック: なし( ) 4( ) 6( ) 8( ) 桁", "PIN lock: Off( ) 4( ) 6( ) 8( ) digits"),
+                                        TR("New 3DS の CPU: 通常( ) クロック( ) L2( ) 両方( )", "New 3DS CPU: Off( ) Clock( ) L2( ) Clock+L2( )"),
+                                      };
 
-    static const char *singleOptionsText[] = { "( ) Autoboot EmuNAND",
-                                               "( ) Use EmuNAND FIRM if booting with R",
-                                               "( ) Enable loading external FIRMs and modules",
-                                               "( ) Enable game patching",
-                                               "( ) Show NAND or user string in System Settings",
-                                               "( ) Show GBA boot screen in patched AGB_FIRM",
-                                               "( ) Set developer UNITINFO",
-                                               "( ) Disable ARM11 exception handlers",
-                                             };
+    const char *singleOptionsText[] = { TR("( ) EmuNAND で起動する", "( ) Autoboot EmuNAND"),
+                                        TR("( ) R で起動したら EmuNAND の FIRM を使う", "( ) Use EmuNAND FIRM if booting with R"),
+                                        TR("( ) 外部の FIRM とモジュールを読み込む", "( ) Enable loading external FIRMs and modules"),
+                                        TR("( ) ゲームのパッチを使う", "( ) Enable game patching"),
+                                        TR("( ) 本体設定に NAND の名前か文字列を出す", "( ) Show NAND or user string in System Settings"),
+                                        TR("( ) AGB_FIRM で GBA の起動画面を出す", "( ) Show GBA boot screen in patched AGB_FIRM"),
+                                        TR("( ) 開発機の UNITINFO にする", "( ) Set developer UNITINFO"),
+                                        TR("( ) ARM11 の例外ハンドラーを使わない", "( ) Disable ARM11 exception handlers"),
+                                      };
 
-    static const char *optionsDescription[]  = { "Select the default EmuNAND.\n\n"
-                                                 "It will be booted when no\n"
-                                                 "directional pad buttons are pressed.",
+    // 下の画面は 1 行に全角 25 字まで
+    const char *optionsDescription[]  = { TR("標準の EmuNAND を選びます。\n\n"
+                                             "十字キーを押さずに起動したときに\n"
+                                             "使います。",
+                                             "Select the default EmuNAND.\n\n"
+                                             "It will be booted when no\n"
+                                             "directional pad buttons are pressed."),
 
-                                                 "Select the screen brightness.",
+                                          TR("画面の明るさを選びます。", "Select the screen brightness."),
 
-                                                 "Enable splash screen support.\n\n"
-                                                 "\t* 'Before payloads' displays it\n"
-                                                 "before booting payloads\n"
-                                                 "(intended for splashes that display\n"
-                                                 "button hints).\n\n"
-                                                 "\t* 'After payloads' displays it\n"
-                                                 "afterwards.",
+                                          TR("スプラッシュ画面を出します。\n\n"
+                                             "\t* 「ペイロードの前」は、ペイロードを\n"
+                                             "起動する前に出します（ボタンの案内を\n"
+                                             "出す画面向け）。\n\n"
+                                             "\t* 「後」は、そのあとに出します。",
+                                             "Enable splash screen support.\n\n"
+                                             "\t* 'Before payloads' displays it\n"
+                                             "before booting payloads\n"
+                                             "(intended for splashes that display\n"
+                                             "button hints).\n\n"
+                                             "\t* 'After payloads' displays it\n"
+                                             "afterwards."),
 
-                                                 "Select how long the splash screen\n"
-                                                 "displays.\n\n"
-                                                 "This has no effect if the splash\n"
-                                                 "screen is not enabled.",
+                                          TR("スプラッシュ画面を出す時間を\n"
+                                             "選びます。\n\n"
+                                             "スプラッシュ画面を使わないときは\n"
+                                             "何も変わりません。",
+                                             "Select how long the splash screen\n"
+                                             "displays.\n\n"
+                                             "This has no effect if the splash\n"
+                                             "screen is not enabled."),
 
-                                                 "Activate a PIN lock.\n\n"
-                                                 "The PIN will be asked each time\n"
-                                                 "Luma3DS boots.\n\n"
-                                                 "4, 6 or 8 digits can be selected.\n\n"
-                                                 "The ABXY buttons and the directional\n"
-                                                 "pad buttons can be used as keys.\n\n"
-                                                 "A message can also be displayed\n"
-                                                 "(refer to the wiki for instructions).",
+                                          TR("PIN ロックを使います。\n\n"
+                                             "Luma3DS を起動するたびに PIN を\n"
+                                             "たずねます。\n\n"
+                                             "4 桁・6 桁・8 桁から選べます。\n\n"
+                                             "ABXY ボタンと十字キーを使います。\n\n"
+                                             "メッセージを出すこともできます\n"
+                                             "（やり方は wiki を見てください）。",
+                                             "Activate a PIN lock.\n\n"
+                                             "The PIN will be asked each time\n"
+                                             "Luma3DS boots.\n\n"
+                                             "4, 6 or 8 digits can be selected.\n\n"
+                                             "The ABXY buttons and the directional\n"
+                                             "pad buttons can be used as keys.\n\n"
+                                             "A message can also be displayed\n"
+                                             "(refer to the wiki for instructions)."),
 
-                                                 "Select the New 3DS CPU mode.\n\n"
-                                                 "This won't apply to\n"
-                                                 "New 3DS exclusive/enhanced games.\n\n"
-                                                 "'Clock+L2' can cause issues with some\n"
-                                                 "games.",
+                                          TR("New 3DS の CPU の動かし方を\n"
+                                             "選びます。\n\n"
+                                             "New 3DS 専用・対応のゲームには\n"
+                                             "効きません。\n\n"
+                                             "「両方」（クロック + L2）は、\n"
+                                             "うまく動かないゲームがあります。",
+                                             "Select the New 3DS CPU mode.\n\n"
+                                             "This won't apply to\n"
+                                             "New 3DS exclusive/enhanced games.\n\n"
+                                             "'Clock+L2' can cause issues with some\n"
+                                             "games."),
 
-                                                 "If enabled, an EmuNAND\n"
-                                                 "will be launched on boot.\n\n"
-                                                 "Otherwise, SysNAND will.\n\n"
-                                                 "Hold L on boot to switch NAND.\n\n"
-                                                 "To use a different EmuNAND from the\n"
-                                                 "default, hold a directional pad button\n"
-                                                 "(Up/Right/Down/Left equal EmuNANDs\n"
-                                                 "1/2/3/4).",
+                                          TR("オンにすると、起動したときに\n"
+                                             "EmuNAND を使います。\n\n"
+                                             "オフなら SysNAND を使います。\n\n"
+                                             "起動するときに L を押していると\n"
+                                             "入れ替わります。\n\n"
+                                             "標準と違う EmuNAND を使うには、\n"
+                                             "十字キーを押しながら起動します\n"
+                                             "（上・右・下・左で EmuNAND\n"
+                                             "1・2・3・4）。",
+                                             "If enabled, an EmuNAND\n"
+                                             "will be launched on boot.\n\n"
+                                             "Otherwise, SysNAND will.\n\n"
+                                             "Hold L on boot to switch NAND.\n\n"
+                                             "To use a different EmuNAND from the\n"
+                                             "default, hold a directional pad button\n"
+                                             "(Up/Right/Down/Left equal EmuNANDs\n"
+                                             "1/2/3/4)."),
 
-                                                 "If enabled, when holding R on boot\n"
-                                                 "SysNAND will be booted with an\n"
-                                                 "EmuNAND FIRM.\n\n"
-                                                 "Otherwise, an EmuNAND will be booted\n"
-                                                 "with the SysNAND FIRM.\n\n"
-                                                 "To use a different EmuNAND from the\n"
-                                                 "default, hold a directional pad button\n"
-                                                 "(Up/Right/Down/Left equal EmuNANDs\n"
-                                                 "1/2/3/4), also add A if you have\n"
-                                                 "a matching payload.",
+                                          TR("オンにすると、R を押しながら起動した\n"
+                                             "ときに、SysNAND を EmuNAND の FIRM\n"
+                                             "で起動します。\n\n"
+                                             "オフなら、EmuNAND を SysNAND の\n"
+                                             "FIRM で起動します。\n\n"
+                                             "標準と違う EmuNAND を使うには、\n"
+                                             "十字キーも押します（上・右・下・左で\n"
+                                             "EmuNAND 1・2・3・4）。合うペイロード\n"
+                                             "があれば A も押します。",
+                                             "If enabled, when holding R on boot\n"
+                                             "SysNAND will be booted with an\n"
+                                             "EmuNAND FIRM.\n\n"
+                                             "Otherwise, an EmuNAND will be booted\n"
+                                             "with the SysNAND FIRM.\n\n"
+                                             "To use a different EmuNAND from the\n"
+                                             "default, hold a directional pad button\n"
+                                             "(Up/Right/Down/Left equal EmuNANDs\n"
+                                             "1/2/3/4), also add A if you have\n"
+                                             "a matching payload."),
 
-                                                 "Enable loading external FIRMs and\n"
-                                                 "system modules.\n\n"
-                                                 "This isn't needed in most cases.\n\n"
-                                                 "Refer to the wiki for instructions.",
+                                          TR("外部の FIRM とシステムモジュールを\n"
+                                             "読み込みます。\n\n"
+                                             "ふつうは要りません。\n\n"
+                                             "やり方は wiki を見てください。",
+                                             "Enable loading external FIRMs and\n"
+                                             "system modules.\n\n"
+                                             "This isn't needed in most cases.\n\n"
+                                             "Refer to the wiki for instructions."),
 
-                                                 "Enable overriding the region and\n"
-                                                 "language configuration and the usage\n"
-                                                 "of patched code binaries, exHeaders,\n"
-                                                 "IPS code patches and LayeredFS\n"
-                                                 "for specific games.\n\n"
-                                                 "Also makes certain DLCs\n"
-                                                 "for out-of-region games work.\n\n"
-                                                 "Refer to the wiki for instructions.",
+                                          TR("ゲームごとに、地域と言語の設定を\n"
+                                             "変えたり、パッチを当てたコード・\n"
+                                             "exHeader・IPS のパッチ・LayeredFS\n"
+                                             "を使ったりできるようにします。\n\n"
+                                             "ほかの地域のゲームの一部の追加\n"
+                                             "コンテンツも使えるようになります。\n\n"
+                                             "やり方は wiki を見てください。",
+                                             "Enable overriding the region and\n"
+                                             "language configuration and the usage\n"
+                                             "of patched code binaries, exHeaders,\n"
+                                             "IPS code patches and LayeredFS\n"
+                                             "for specific games.\n\n"
+                                             "Also makes certain DLCs\n"
+                                             "for out-of-region games work.\n\n"
+                                             "Refer to the wiki for instructions."),
 
-                                                 "Enable showing the current NAND/FIRM:\n\n"
-                                                 "\t* Sys  = SysNAND\n"
-                                                 "\t* Emu  = EmuNAND 1\n"
-                                                 "\t* EmuX = EmuNAND X\n"
-                                                 "\t* SysE = SysNAND with EmuNAND 1 FIRM\n"
-                                                 "\t* SyEX = SysNAND with EmuNAND X FIRM\n"
-                                                 "\t* EmuS = EmuNAND 1 with SysNAND FIRM\n"
-                                                 "\t* EmXS = EmuNAND X with SysNAND FIRM\n\n"
-                                                 "or a user-defined custom string in\n"
-                                                 "System Settings.\n\n"
-                                                 "Refer to the wiki for instructions.",
+                                          TR("本体設定に、いまの NAND と FIRM を\n"
+                                             "出します。\n\n"
+                                             "\t* Sys  = SysNAND\n"
+                                             "\t* Emu  = EmuNAND 1\n"
+                                             "\t* EmuX = EmuNAND X\n"
+                                             "\t* SysE = SysNAND + EmuNAND 1 の FIRM\n"
+                                             "\t* SyEX = SysNAND + EmuNAND X の FIRM\n"
+                                             "\t* EmuS = EmuNAND 1 + SysNAND の FIRM\n"
+                                             "\t* EmXS = EmuNAND X + SysNAND の FIRM\n\n"
+                                             "決めた文字列を出すこともできます。\n\n"
+                                             "やり方は wiki を見てください。",
+                                             "Enable showing the current NAND/FIRM:\n\n"
+                                             "\t* Sys  = SysNAND\n"
+                                             "\t* Emu  = EmuNAND 1\n"
+                                             "\t* EmuX = EmuNAND X\n"
+                                             "\t* SysE = SysNAND with EmuNAND 1 FIRM\n"
+                                             "\t* SyEX = SysNAND with EmuNAND X FIRM\n"
+                                             "\t* EmuS = EmuNAND 1 with SysNAND FIRM\n"
+                                             "\t* EmXS = EmuNAND X with SysNAND FIRM\n\n"
+                                             "or a user-defined custom string in\n"
+                                             "System Settings.\n\n"
+                                             "Refer to the wiki for instructions."),
 
-                                                 "Enable showing the GBA boot screen\n"
-                                                 "when booting GBA games.",
+                                          TR("GBA のゲームを起動するときに、\n"
+                                             "GBA の起動画面を出します。",
+                                             "Enable showing the GBA boot screen\n"
+                                             "when booting GBA games."),
 
-                                                 "Make the console be always detected\n"
-                                                 "as a development unit, and conversely.\n"
-                                                 "(which breaks online features, amiibo\n"
-                                                 "and retail CIAs, but allows installing\n"
-                                                 "and booting some developer software).\n\n"
-                                                 "Only select this if you know what you\n"
-                                                 "are doing!",
+                                          TR("本体をいつも開発機として扱います\n"
+                                             "（その逆も）。オンラインの機能・\n"
+                                             "amiibo・製品版の CIA が使えなく\n"
+                                             "なりますが、一部の開発用ソフトを\n"
+                                             "入れて起動できるようになります。\n\n"
+                                             "分かっているときだけ選んでください。",
+                                             "Make the console be always detected\n"
+                                             "as a development unit, and conversely.\n"
+                                             "(which breaks online features, amiibo\n"
+                                             "and retail CIAs, but allows installing\n"
+                                             "and booting some developer software).\n\n"
+                                             "Only select this if you know what you\n"
+                                             "are doing!"),
 
-                                                 "Disables the fatal error exception\n"
-                                                 "handlers for the ARM11 CPU.\n\n"
-                                                 "Note: Disabling the exception handlers\n"
-                                                 "will disqualify you from submitting\n"
-                                                 "issues or bug reports to the Luma3DS\n"
-                                                 "GitHub repository!"
-                                               };
+                                          TR("ARM11 の致命的なエラーの例外\n"
+                                             "ハンドラーを使いません。\n\n"
+                                             "注意: 使わないようにすると、\n"
+                                             "Luma3DS の GitHub に不具合を\n"
+                                             "報告できなくなります。",
+                                             "Disables the fatal error exception\n"
+                                             "handlers for the ARM11 CPU.\n\n"
+                                             "Note: Disabling the exception handlers\n"
+                                             "will disqualify you from submitting\n"
+                                             "issues or bug reports to the Luma3DS\n"
+                                             "GitHub repository!")
+                                        };
 
     FirmwareSource nandType = FIRMWARE_SYSNAND;
     if(isSdMode)
@@ -233,7 +315,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
         { .visible = true }
     };
 
-    
+    //Calculate the amount of the various kinds of options and pre-select the first single one
     u32 multiOptionsAmount = sizeof(multiOptions) / sizeof(struct multiOption),
         singleOptionsAmount = sizeof(singleOptions) / sizeof(struct singleOption),
         totalIndexes = multiOptionsAmount + singleOptionsAmount - 1,
@@ -241,13 +323,13 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
         singleSelected;
     bool isMultiOption = false;
 
-    
+    //Parse the existing options
     for(u32 i = 0; i < multiOptionsAmount; i++)
     {
-        
+        //Detect the positions where the "x" should go
         u32 optionNum = 0;
         for(u32 j = 0; optionNum < 4 && j < strlen(multiOptionsText[i]); j++)
-            if(multiOptionsText[i][j] == '(') multiOptions[i].posXs[optionNum++] = j + 1;
+            if(multiOptionsText[i][j] == '(') multiOptions[i].posXs[optionNum++] = drawStringWidth(multiOptionsText[i], j + 1);  // 日本語の字は幅が違うので、点で数える
         while(optionNum < 4) multiOptions[i].posXs[optionNum++] = 0;
 
         multiOptions[i].enabled = MULTICONFIG(i);
@@ -262,28 +344,28 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                        "FIRM0",
                                        "FIRM1" };
 
-    drawString(true, 10, 10, COLOR_TITLE, CONFIG_TITLE);
-    drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, "Press A to select, START to save");
-    drawFormattedString(false, 10, SCREEN_HEIGHT - 2 * SPACING_Y, COLOR_YELLOW, "Booted from %s via %s", isSdMode ? "SD" : "CTRNAND", bootTypes[(u32)bootType]);
+    drawString(true, 10, 10, COLOR_TITLE, TR(CONFIG_TITLE_JA, CONFIG_TITLE));
+    drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, TR("A: 選ぶ   START: 保存する", "Press A to select, START to save"));
+    drawFormattedString(false, 10, SCREEN_HEIGHT - 2 * SPACING_Y, COLOR_YELLOW, TR("%s から %s で起動しました", "Booted from %s via %s"), isSdMode ? "SD" : "CTRNAND", bootTypes[(u32)bootType]);
 
-    
+    //Character to display a selected option
     char selected = 'x';
 
     u32 endPos = 10 + 2 * SPACING_Y;
 
-    
+    //Display all the multiple choice options in white
     for(u32 i = 0; i < multiOptionsAmount; i++)
     {
         if(!multiOptions[i].visible) continue;
 
         multiOptions[i].posY = endPos + SPACING_Y;
         endPos = drawString(true, 10, multiOptions[i].posY, COLOR_WHITE, multiOptionsText[i]);
-        drawCharacter(true, 10 + multiOptions[i].posXs[multiOptions[i].enabled] * SPACING_X, multiOptions[i].posY, COLOR_WHITE, selected);
+        drawCharacter(true, 10 + multiOptions[i].posXs[multiOptions[i].enabled], multiOptions[i].posY, COLOR_WHITE, selected);
     }
 
     endPos += SPACING_Y / 2;
 
-    
+    //Display all the normal options in white except for the first one
     for(u32 i = 0, color = COLOR_RED; i < singleOptionsAmount; i++)
     {
         if(!singleOptions[i].visible) continue;
@@ -302,7 +384,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
 
     drawString(false, 10, 10, COLOR_WHITE, optionsDescription[selectedOption]);
 
-    
+    //Boring configuration menu
     while(true)
     {
         u32 pressed;
@@ -316,7 +398,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
 
         if(pressed != BUTTON_A)
         {
-            
+            //Remember the previously selected option
             u32 oldSelectedOption = selectedOption;
 
             while(true)
@@ -361,11 +443,11 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
 
             if(selectedOption == oldSelectedOption) continue;
 
-            
+            //The user moved to a different option, print the old option in white and the new one in red. Only print 'x's if necessary
             if(oldSelectedOption < multiOptionsAmount)
             {
                 drawString(true, 10, multiOptions[oldSelectedOption].posY, COLOR_WHITE, multiOptionsText[oldSelectedOption]);
-                drawCharacter(true, 10 + multiOptions[oldSelectedOption].posXs[multiOptions[oldSelectedOption].enabled] * SPACING_X, multiOptions[oldSelectedOption].posY, COLOR_WHITE, selected);
+                drawCharacter(true, 10 + multiOptions[oldSelectedOption].posXs[multiOptions[oldSelectedOption].enabled], multiOptions[oldSelectedOption].posY, COLOR_WHITE, selected);
             }
             else
             {
@@ -386,7 +468,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
             if(isMultiOption)
             {
                 u32 oldEnabled = multiOptions[selectedOption].enabled;
-                drawCharacter(true, 10 + multiOptions[selectedOption].posXs[oldEnabled] * SPACING_X, multiOptions[selectedOption].posY, COLOR_BLACK, selected);
+                drawCharacter(true, 10 + multiOptions[selectedOption].posXs[oldEnabled], multiOptions[selectedOption].posY, COLOR_BLACK, selected);
                 multiOptions[selectedOption].enabled = (oldEnabled == 3 || !multiOptions[selectedOption].posXs[oldEnabled + 1]) ? 0 : oldEnabled + 1;
 
                 if(selectedOption == BRIGHTNESS) updateBrightness(multiOptions[BRIGHTNESS].enabled);
@@ -399,12 +481,12 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
             }
         }
 
-        
-        if(isMultiOption) drawCharacter(true, 10 + multiOptions[selectedOption].posXs[multiOptions[selectedOption].enabled] * SPACING_X, multiOptions[selectedOption].posY, COLOR_RED, selected);
+        //In any case, if the current option is enabled (or a multiple choice option is selected) we must display a red 'x'
+        if(isMultiOption) drawCharacter(true, 10 + multiOptions[selectedOption].posXs[multiOptions[selectedOption].enabled], multiOptions[selectedOption].posY, COLOR_RED, selected);
         else if(singleOptions[singleSelected].enabled) drawCharacter(true, 10 + SPACING_X, singleOptions[singleSelected].posY, COLOR_RED, selected);
     }
 
-    
+    //Parse and write the new configuration
     configData.multiConfig = 0;
     for(u32 i = 0; i < multiOptionsAmount; i++)
         configData.multiConfig |= multiOptions[i].enabled << (i * 2);

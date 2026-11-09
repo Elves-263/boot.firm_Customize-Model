@@ -44,7 +44,7 @@ Result GetProcessInfoHook(s64 *out, Handle processHandle, u32 type)
             process = KProcessHandleTable__ToKProcess(handleTable, processHandle);
 
         if(process == NULL)
-            return 0xD8E007F7; 
+            return 0xD8E007F7; // invalid handle
 
         switch(type)
         {
@@ -88,7 +88,7 @@ Result GetProcessInfoHook(s64 *out, Handle processHandle, u32 type)
                 break;
             }
             default:
-                res = 0xD8E007ED; 
+                res = 0xD8E007ED; // invalid enum value
                 break;
         }
 

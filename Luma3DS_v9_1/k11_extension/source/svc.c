@@ -56,9 +56,9 @@ void signalSvcEntry(u8 *pageEnd)
     KProcess *currentProcess = currentCoreContext->objectContext.currentProcess;
 
     if(svcId == 0xFE)
-        svcId = *(u32 *)(pageEnd - 0x110 + 8 * 4); 
+        svcId = *(u32 *)(pageEnd - 0x110 + 8 * 4); // r12 ; note: max theortical SVC atm: 0x3FFFFFFF. We don't support catching svcIds >= 0x100 atm either
 
-    
+    // Since DBGEVENT_SYSCALL_ENTRY is non blocking, we'll cheat using EXCEVENT_UNDEFINED_SYSCALL (debug->svcId is fortunately an u16!)
     if(debugOfProcess(currentProcess) != NULL && shouldSignalSyscallDebugEvent(currentProcess, svcId))
     {
         SignalDebugEvent(DBGEVENT_OUTPUT_STRING, 0xFFFFFFFE, svcId);
@@ -72,9 +72,9 @@ void signalSvcReturn(u8 *pageEnd)
     u32      flags = KPROCESS_GET_RVALUE(currentProcess, customFlags);
 
     if(svcId == 0xFE)
-        svcId = *(u32 *)(pageEnd - 0x110 + 8 * 4); 
+        svcId = *(u32 *)(pageEnd - 0x110 + 8 * 4); // r12 ; note: max theortical SVC atm: 0x1FFFFFFF. We don't support catching svcIds >= 0x100 atm either
 
-    
+    // Since DBGEVENT_SYSCALL_RETURN is non blocking, we'll cheat using EXCEVENT_UNDEFINED_SYSCALL (debug->svcId is fortunately an u16!)
     if(debugOfProcess(currentProcess) != NULL && shouldSignalSyscallDebugEvent(currentProcess, svcId))
         SignalDebugEvent(DBGEVENT_OUTPUT_STRING, 0xFFFFFFFF, svcId);
 
@@ -95,7 +95,7 @@ void postprocessSvc(void)
     officialPostProcessSvc();
 }
 
-static bool doingVeryShittyPmResLimitWorkaround = false; 
+static bool doingVeryShittyPmResLimitWorkaround = false; // I feel dirty
 
 void *svcHook(u8 *pageEnd)
 {
@@ -103,15 +103,15 @@ void *svcHook(u8 *pageEnd)
 
     u32 svcId = *(u8 *)(pageEnd - 0xB5);
     if(svcId == 0xFE)
-        svcId = *(u32 *)(pageEnd - 0x110 + 8 * 4); 
+        svcId = *(u32 *)(pageEnd - 0x110 + 8 * 4); // r12 ; note: max theortical SVC atm: 0x3FFFFFFF. We don't support catching svcIds >= 0x100 atm either
 
     switch(svcId)
     {
         case 0x01:
             return ControlMemoryHookWrapper;
-        case 0x03:  
+        case 0x03: /* svcExitProcess */
         {
-            
+            // Signal that the process is about to be terminated
             u32      flags = KPROCESS_GET_RVALUE(currentProcess, customFlags);
 
             if (flags & SignalOnExit)
@@ -127,7 +127,7 @@ void *svcHook(u8 *pageEnd)
         }
 
         case 0x17:
-            if(strcmp(codeSetOfProcess(currentProcess)->processName, "pm") == 0) 
+            if(strcmp(codeSetOfProcess(currentProcess)->processName, "pm") == 0) // only called twice in pm, by the same function
             {
                 *(vu32 *)(configPage + 0x44) += __end__ - __start__;
                 doingVeryShittyPmResLimitWorkaround = true;
@@ -144,7 +144,7 @@ void *svcHook(u8 *pageEnd)
         case 0x2D:
             return ConnectToPortHookWrapper;
         case 0x2E:
-            return GetCFWInfo; 
+            return GetCFWInfo; // DEPRECATED
         case 0x32:
             return SendSyncRequestHook;
         case 0x3C:

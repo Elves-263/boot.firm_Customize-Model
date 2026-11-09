@@ -24,7 +24,7 @@ ProcessData *findProcessData(u32 pid)
 
 ProcessData *doRegisterProcess(u32 pid, char (*serviceAccessList)[8], u32 serviceAccessListSize)
 {
-    (void)serviceAccessList; 
+    (void)serviceAccessList; // Service access list checks removed for Luma3DS, see original 3ds_sm for implementation details.
     (void)serviceAccessListSize;
 
     ProcessData *processData = (ProcessData *)allocateNode(&processDataInUseList, &freeProcessDataList, sizeof(ProcessData), false);
@@ -57,7 +57,7 @@ Result UnregisterProcess(u32 pid)
 
     svcCloseHandle(processData->notificationSemaphore);
 
-    
+    // Unregister the services registered by the process
     u32 i = 0;
     while(i < nbServices)
     {

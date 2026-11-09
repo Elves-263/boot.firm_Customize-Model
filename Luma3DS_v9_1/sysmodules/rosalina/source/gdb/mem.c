@@ -68,7 +68,7 @@ Result GDB_WriteMemoryInPage(GDBContext *ctx, const void *in, u32 addr, u32 len)
     svcGetSystemInfo(&TTBCR, 0x10002, 0);
 
     if(addr < (1u << (32 - (u32)TTBCR)))
-        return svcWriteProcessMemory(ctx->debug, in, addr, len); 
+        return svcWriteProcessMemory(ctx->debug, in, addr, len); // not sure if it checks if it's IO or not. It probably does
     else if(!ctx->enableExternalMemoryAccess)
         return -1;
     else if(addr >= 0x80000000 && addr < 0xB0000000)
@@ -87,7 +87,7 @@ Result GDB_WriteMemoryInPage(GDBContext *ctx, const void *in, u32 addr, u32 len)
         }
         else
         {
-            
+            // Unreliable, use at your own risk
 
             svcFlushEntireDataCache();
             svcInvalidateEntireInstructionCache();
@@ -109,7 +109,7 @@ int GDB_SendMemory(GDBContext *ctx, const char *prefix, u32 prefixLen, u32 addr,
     else
         prefixLen = 0;
 
-    if(prefixLen + 2 * len > GDB_BUF_LEN) 
+    if(prefixLen + 2 * len > GDB_BUF_LEN) // gdb shouldn't send requests which responses don't fit in a packet
         return prefix == NULL ? GDB_ReplyErrno(ctx, ENOMEM) : -1;
 
     Result r = 0;

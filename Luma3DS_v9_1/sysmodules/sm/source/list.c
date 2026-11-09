@@ -45,20 +45,20 @@ void moveNode(void *node, void *dst, bool back)
     if(dstB == srcB)
         return;
 
-    
+    // Remove the node in the source list
     if(nodeB->prev != NULL)
         nodeB->prev->next = nodeB->next;
 
     if(nodeB->next != NULL)
         nodeB->next->prev = nodeB->prev;
 
-    
+    // Update the source list if needed
     if(nodeB == srcB->first)
         srcB->first = nodeB->next;
     if(nodeB == srcB->last)
         srcB->last = nodeB->prev;
 
-    
+    // Insert the node in the destination list
     if(back)
     {
         if(dstB->last != NULL)
@@ -78,7 +78,7 @@ void moveNode(void *node, void *dst, bool back)
         dstB->first = nodeB;
     }
 
-    
+    // Normalize the destination list
     if(dstB->first != NULL && dstB->last == NULL)
         dstB->last = dstB->first;
     else if(dstB->first == NULL && dstB->last != NULL)

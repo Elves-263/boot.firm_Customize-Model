@@ -36,7 +36,7 @@ typedef enum WatchpointKind
     WATCHPOINT_READWRITE
 } WatchpointKind;
 
-void GDB_ResetWatchpoints(void); 
+void GDB_ResetWatchpoints(void); // needed for software breakpoints to be detected as debug events as well
 
 int GDB_AddWatchpoint(GDBContext *ctx, u32 address, u32 size, WatchpointKind kind);
 int GDB_RemoveWatchpoint(GDBContext *ctx, u32 address, WatchpointKind kind);

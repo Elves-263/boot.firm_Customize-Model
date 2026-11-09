@@ -35,7 +35,11 @@
 #include <stdlib.h>
 #include <signal.h>
 
- 
+/*
+    Since we can't select particular threads to continue (and that's uncompliant behavior):
+        - if we continue the current thread, continue all threads
+        - otherwise, leaves all threads stopped but make the client believe it's continuing
+*/
 
 GDB_DECLARE_HANDLER(Detach)
 {
@@ -81,7 +85,7 @@ GDB_DECLARE_HANDLER(Continue)
         if(ctx->commandData[0] == 0 || ctx->commandData[1] == 0 || (ctx->commandData[2] != 0 && ctx->commandData[2] == ';'))
             return GDB_ReplyErrno(ctx, EILSEQ);
 
-        
+        // Signal ignored...
 
         if(ctx->commandData[2] == ';')
             addrStart = ctx->commandData + 3;
@@ -121,7 +125,7 @@ GDB_DECLARE_VERBOSE_HANDLER(Continue)
 
         pos += *pos == 'C' ? 3 : 1;
 
-        if(*pos++ != ':') 
+        if(*pos++ != ':') // default action found
         {
             currentThreadFound = true;
             break;
@@ -164,7 +168,7 @@ static int GDB_ParseCommonThreadInfo(char *out, GDBContext *ctx, int sig)
     if(R_FAILED(r))
         return n;
 
-    r = svcGetDebugThreadParam(&dummy, &core, ctx->debug, ctx->currentThreadId, DBGTHREAD_PARAMETER_CPU_CREATOR); 
+    r = svcGetDebugThreadParam(&dummy, &core, ctx->debug, ctx->currentThreadId, DBGTHREAD_PARAMETER_CPU_CREATOR); // Creator = "first ran, and running the thread"
 
     if(R_SUCCEEDED(r))
         n += sprintf(out + n, "core:%x;", core);
@@ -250,7 +254,7 @@ void GDB_PreprocessDebugEvent(GDBContext *ctx, DebugEventInfo *info)
             {
                 case EXCEVENT_UNDEFINED_INSTRUCTION:
                 {
-                    
+                    // kernel bugfix for thumb mode
                     ThreadContext regs;
                     Result r = svcGetDebugThreadContext(&regs, ctx->debug, info->thread_id, THREADCONTEXT_CONTROL_CPU_SPRS);
                     if(R_SUCCEEDED(r) && (regs.cpu_registers.cpsr & 0x20) != 0)
@@ -278,12 +282,12 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
     switch(info->type)
     {
         case DBGEVENT_ATTACH_PROCESS:
-            break; 
+            break; // Dismissed
 
         case DBGEVENT_ATTACH_THREAD:
         {
             if(info->attach_thread.creator_thread_id == 0 || !ctx->catchThreadEvents)
-                break; 
+                break; // Dismissed
             else
             {
                 ctx->currentThreadId = info->thread_id;
@@ -295,7 +299,7 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
         {
             if(ctx->catchThreadEvents && info->exit_thread.reason < EXITTHREAD_EVENT_EXIT_PROCESS)
             {
-                
+                // no signal, SIGTERM, SIGQUIT (process exited), SIGTERM (process terminated)
                 static int threadExitRepliesSigs[] = { 0, SIGTERM, SIGQUIT, SIGTERM };
                 return GDB_SendFormattedPacket(ctx, "w%02x;%x", threadExitRepliesSigs[(u32)info->exit_thread.reason], info->thread_id);
             }
@@ -304,7 +308,7 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
 
         case DBGEVENT_EXIT_PROCESS:
         {
-            
+            // exited (no error / unhandled exception), SIGTERM (process terminated) * 2
             static const char *processExitReplies[] = { "W00", "X0f", "X0f" };
             return GDB_SendPacket(ctx, processExitReplies[(u32)info->exit_process.reason], 3);
         }
@@ -316,8 +320,8 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
             switch(exc.type)
             {
                 case EXCEVENT_UNDEFINED_INSTRUCTION:
-                case EXCEVENT_PREFETCH_ABORT: 
-                case EXCEVENT_DATA_ABORT:     
+                case EXCEVENT_PREFETCH_ABORT: // doesn't include hardware breakpoints
+                case EXCEVENT_DATA_ABORT:     // doesn't include hardware watchpoints
                 case EXCEVENT_UNALIGNED_DATA_ACCESS:
                 case EXCEVENT_UNDEFINED_SYSCALL:
                 {
@@ -347,7 +351,7 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
 
                         case STOPPOINT_BREAKPOINT:
                         {
-                            
+                            // /!\ Not actually implemented (and will never be)
                             GDB_ParseCommonThreadInfo(buffer, ctx, SIGTRAP);
                             return GDB_SendFormattedPacket(ctx, "%shwbreak:;", buffer);
                             break;
@@ -376,7 +380,7 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
                     ctx->currentThreadId = info->thread_id;
                     GDB_ParseCommonThreadInfo(buffer, ctx, SIGINT);
                     return GDB_SendFormattedPacket(ctx, "%s", buffer);
-                    
+                    //TODO
                 }
 
                 case EXCEVENT_DEBUGGER_BREAK:
@@ -456,7 +460,10 @@ int GDB_SendStopReply(GDBContext *ctx, const DebugEventInfo *info)
     return 0;
 }
 
- 
+/*
+    Only 1 blocking event can be enqueued at a time: they preempt all the other threads.
+    The only "non-blocking" event that is implemented is EXIT PROCESS (but it's a very special case)
+*/
 int GDB_HandleDebugEvents(GDBContext *ctx)
 {
     if(ctx->state == GDB_STATE_CLOSING)
@@ -484,7 +491,7 @@ int GDB_HandleDebugEvents(GDBContext *ctx)
         if(info.flags & 1)
             r = svcContinueDebugEvent(ctx->debug, ctx->continueFlags);
 
-        if(r == (Result)0xD8A02008) 
+        if(r == (Result)0xD8A02008) // process ended
             return -2;
 
         return -ret - 3;

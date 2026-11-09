@@ -35,6 +35,7 @@
 #include "ifile.h"
 #include "gdb/server.h"
 #include "minisoc.h"
+#include "menus/lang.h"
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
@@ -56,11 +57,12 @@ static inline int ProcessListMenu_FormatInfoLine(char *out, const ProcessInfo *i
     for(id = 0; id < MAX_DEBUG && (!(gdbServer.ctxs[id].flags & GDB_FLAG_SELECTED) || gdbServer.ctxs[id].pid != info->pid); id++);
     checkbox = !gdbServer.super.running ? "" : (id < MAX_DEBUG ? "(x) " : "( ) ");
 
-    char commentBuf[23 + 1] = { 0 }; 
+    // 23 桁（"接続元: 255.255.255.255" の幅）の空白で埋める。日本語の字は 1 字 3 バイトなので大きめに取る
+    char commentBuf[32] = { 0 };
     memset(commentBuf, ' ', 23);
 
     if(info->isZombie)
-        memcpy(commentBuf, "Zombie", 7);
+        strcpy(commentBuf, Lang_Str(TR("ゾンビ", "Zombie")));
 
     else if(gdbServer.super.running && id < MAX_DEBUG)
     {
@@ -68,16 +70,16 @@ static inline int ProcessListMenu_FormatInfoLine(char *out, const ProcessInfo *i
         {
             u8 *addr = (u8 *)&gdbServer.ctxs[id].super.addr_in.sin_addr;
             checkbox = "(A) ";
-            sprintf(commentBuf, "Remote: %hhu.%hhu.%hhu.%hhu", addr[0], addr[1], addr[2], addr[3]);
+            sprintf(commentBuf, TR("接続元: %hhu.%hhu.%hhu.%hhu", "Remote: %hhu.%hhu.%hhu.%hhu"), addr[0], addr[1], addr[2], addr[3]);
         }
         else
         {
             checkbox = "(W) ";
-            sprintf(commentBuf, "Port: %d", GDB_PORT_BASE + id);
+            sprintf(commentBuf, TR("ポート: %d", "Port: %d"), GDB_PORT_BASE + id);
         }
     }
 
-    return sprintf(out, "%s%-4u    %-8.8s    %s", checkbox, info->pid, info->name, commentBuf); 
+    return sprintf(out, "%s%-4u    %-8.8s    %s", checkbox, info->pid, info->name, commentBuf); // Theoritically PIDs are 32-bit ints, but we'll only justify 4 digits
 }
 
 static void ProcessListMenu_DumpMemory(const char *name, void *start, u32 size)
@@ -85,8 +87,8 @@ static void ProcessListMenu_DumpMemory(const char *name, void *start, u32 size)
 #define TRY(expr) if(R_FAILED(res = (expr))) goto end;
 
     Draw_Lock();
-    Draw_DrawString(10, 10, COLOR_TITLE, "Memory dump");
-    const char * wait_message = "Please wait, this may take a while...";
+    Draw_DrawString(10, 10, COLOR_TITLE, TR("メモリの書き出し", "Memory dump"));
+    const char * wait_message = TR("時間がかかることがあります。お待ちください...", "This may take a while, please wait...");
     Draw_DrawString(10, 30, COLOR_WHITE, wait_message);
     Draw_FlushFramebuffer();
     Draw_Unlock();
@@ -111,10 +113,10 @@ static void ProcessListMenu_DumpMemory(const char *name, void *start, u32 size)
     if(R_SUCCEEDED(res))
     {
         res = FSUSER_CreateDirectory(archive, fsMakePath(PATH_ASCII, "/luma/dumps"), 0);
-        if((u32)res == 0xC82044BE) 
+        if((u32)res == 0xC82044BE) // directory already exists
             res = 0;
         res = FSUSER_CreateDirectory(archive, fsMakePath(PATH_ASCII, "/luma/dumps/memory"), 0);
-        if((u32)res == 0xC82044BE) 
+        if((u32)res == 0xC82044BE) // directory already exists
             res = 0;
         FSUSER_CloseArchive(archive);
     }
@@ -173,17 +175,17 @@ end:
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Memory dump");
-        Draw_DrawFormattedString(10, 30, COLOR_WHITE, "%*s", strlen(wait_message), " ");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("メモリの書き出し", "Memory dump"));
+        Draw_DrawFormattedString(10, 30, COLOR_WHITE, "%*s", (int)Draw_TextColumns(wait_message), " ");
         if(R_FAILED(res))
         {
             Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (0x%.8lx).", res);
         }
         else
         {
-            Draw_DrawString(10, 30, COLOR_WHITE, "Operation succeeded.");
+            Draw_DrawString(10, 30, COLOR_WHITE, TR("完了しました。", "Operation succeeded."));
         }
-        Draw_DrawString(10, 30+SPACING_Y, COLOR_WHITE, "Press B to go back.");
+        Draw_DrawString(10, 30+SPACING_Y, COLOR_WHITE, TR("B: 戻る", "B: back"));
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -213,7 +215,7 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
         svcGetProcessInfo(&textStartAddress, processHandle, 0x10005);
 
         codeTotalSize = (u32)(textTotalRoundedSize + rodataTotalRoundedSize + dataTotalRoundedSize);
-        codeStartAddress = (u32)textStartAddress; 
+        codeStartAddress = (u32)textStartAddress; //should be 0x00100000, rarely 0x14000000
         codeDestAddress = 0x00100000;
 
         MemInfo mem;
@@ -272,15 +274,15 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
                 }
             }
 
-            
+            // Editing
             void selectedByteIncrement(void) { menus[menuMode].buf[menus[menuMode].selected]++; }
             void selectedByteDecrement(void) { menus[menuMode].buf[menus[menuMode].selected]--; }
 
             void selectedByteAdd0x10(void) { menus[menuMode].buf[menus[menuMode].selected] += 0x10; }
             void selectedByteSub0x10(void) { menus[menuMode].buf[menus[menuMode].selected] -= 0x10; }
-            
+            // ------------------------------------------
 
-            
+            // Movement
             #define SELECTED_DEC(decval) do { \
                 if(menus[menuMode].selected >= decval) \
                     menus[menuMode].selected -= decval; \
@@ -296,9 +298,9 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
 
             void selectedMoveUp(void) { SELECTED_DEC(BYTES_PER_ROW); }
             void selectedMoveDown(void) { SELECTED_INC(BYTES_PER_ROW); }
-            
+            // ------------------------------------------
 
-            
+            // Viewing
             void viewHeap(void)
             {
                 if(!heapAvailable) return;
@@ -318,14 +320,14 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
                 viewHeap();
             else
                 viewCode();
-            
+            // ------------------------------------------
 
-            
+            // Jumping
             u32 gotoAddress = 0;
 
             void finishJumping(void)
             {
-                gotoAddress = __builtin_bswap32(gotoAddress); 
+                gotoAddress = __builtin_bswap32(gotoAddress); // The data is edited in reverse, so it needs to be swapped before usage
 
                 u32 codeEndAddress = codeStartAddress + codeTotalSize;
                 u32 heapEndAddress = heapStartAddress + heapTotalSize;
@@ -341,9 +343,9 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
 
             menus[MENU_MODE_GOTO].buf = (u8*)&gotoAddress;
             menus[MENU_MODE_GOTO].max = sizeof(gotoAddress);
-            
+            // ------------------------------------------
 
-            
+            // Searching
             #define searchPatternSize menus[MENU_MODE_SEARCH].max
             #define searchPatternMaxSize (u32)VIEWER_PAGE_SIZE
             u8 searchPattern[searchPatternMaxSize] = {0};
@@ -371,48 +373,48 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
 
             menus[MENU_MODE_SEARCH].buf = searchPattern;
             menus[MENU_MODE_SEARCH].max = 1;
-            
+            // ------------------------------------------
 
             void drawMenu(void)
             {
                 Draw_Lock();
-                Draw_DrawString(10, 10, COLOR_TITLE, "Memory viewer");
+                Draw_DrawString(10, 10, COLOR_TITLE, TR("メモリビューアー", "Memory viewer"));
 
-                
+                // Instructions
                 const u32 instructionsY = 30;
                 u32 viewerY = instructionsY + SPACING_Y + 6;
-                Draw_DrawString(10, instructionsY, COLOR_WHITE, "D-PAD to move, X to jump, Y to search, A to edit.");
+                Draw_DrawString(10, instructionsY, COLOR_WHITE, TR("十字キー:移動  X:ジャンプ  Y:検索  A:編集", "DPAD:move  X:jump  Y:search  A:edit"));
 
                 switch(menuMode)
                 {
                     case MENU_MODE_NORMAL:
-                        Draw_DrawString(10 + SPACING_X * 9, instructionsY, COLOR_GREEN, "move");
+                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 5 : 9), instructionsY, COLOR_GREEN, TR("移動", "move"));
                         break;
                     case MENU_MODE_GOTO:
-                        Draw_DrawString(10 + SPACING_X * 20, instructionsY, COLOR_GREEN, "jump");
+                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 13 : 17), instructionsY, COLOR_GREEN, TR("ジャンプ", "jump"));
                         break;
                     case MENU_MODE_SEARCH:
-                        Draw_DrawString(10 + SPACING_X * 31, instructionsY, COLOR_GREEN, "search");
+                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 21 : 29), instructionsY, COLOR_GREEN, TR("検索", "search"));
                         break;
                     default: break;
                 }
 
                 if(editing)
-                    Draw_DrawString(10 + SPACING_X * 44, instructionsY, COLOR_RED, "edit");
-                
+                    Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 31 : 37), instructionsY, COLOR_RED, TR("編集", "edit"));
+                // ------------------------------------------
 
-                
+                // Location
                 if(codeAvailable && heapAvailable)
                 {
                     const u32 infoY = instructionsY + SPACING_Y;
                     viewerY += SPACING_Y;
-                    Draw_DrawString(10, infoY, COLOR_WHITE, "Press L or R to switch between heap and code.");
+                    Draw_DrawString(10, infoY, COLOR_WHITE, TR("L/R: ヒープとコードを切り替え", "L/R: switch heap/code"));
                     if((u32)menus[MENU_MODE_NORMAL].buf == heapDestAddress)
-                        Draw_DrawString(10 + SPACING_X * 31, infoY, COLOR_GREEN, "heap");
+                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 12 : 5), infoY, COLOR_GREEN, TR("ヒープ", "heap"));
                     if((u32)menus[MENU_MODE_NORMAL].buf == codeDestAddress)
-                        Draw_DrawString(10 + SPACING_X * 40, infoY, COLOR_GREEN, "code");
+                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 17 : 13), infoY, COLOR_GREEN, TR("コード", "code"));
                 }
-                
+                // ------------------------------------------
 
                 for(u32 row = menus[menuMode].starti; row < (menus[menuMode].starti + ROWS_PER_SCREEN); row++)
                 {
@@ -507,7 +509,7 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
 
                 if(editing)
                 {
-                    
+                    // Edit the highlighted byte
                     if(pressed & BUTTON_LEFT)
                         selectedByteAdd0x10();
                     else if(pressed & BUTTON_RIGHT)
@@ -519,7 +521,7 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
                 }
                 else
                 {
-                    
+                    // Move the cursor
                     if(pressed & BUTTON_LEFT)
                         selectedMoveLeft();
                     else if(pressed & BUTTON_RIGHT)
@@ -545,7 +547,7 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
                     }
                 }
 
-                if(pressed & BUTTON_B) 
+                if(pressed & BUTTON_B) // go back to the list, or the simple viewer
                 {
                     if(menuMode != MENU_MODE_NORMAL)
                     {
@@ -656,7 +658,7 @@ void RosalinaMenu_ProcessList(void)
         Draw_Lock();
         if(page != pagePrev)
             Draw_ClearFramebuffer();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Process list");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("プロセス一覧", "Process list"));
 
         if(gdbServer.super.running)
         {

@@ -24,7 +24,7 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/* This file was entirely written by Duckbill */
 
 #pragma once
 
@@ -34,3 +34,4 @@
 
 void RosalinaMenu_Cheats(void);
 void Cheat_ApplyCheats();
+void Cheat_AutoEnable(void);

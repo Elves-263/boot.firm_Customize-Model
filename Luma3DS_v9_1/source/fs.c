@@ -31,6 +31,7 @@
 #include "crypto.h"
 #include "cache.h"
 #include "screen.h"
+#include "lang.h"
 #include "draw.h"
 #include "utils.h"
 #include "fatfs/ff.h"
@@ -196,8 +197,8 @@ bool payloadMenu(char *path)
     {
         initScreens();
 
-        drawString(true, 10, 10, COLOR_TITLE, "Luma3DS chainloader");
-        drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, "Press A to select, START to quit");
+        drawString(true, 10, 10, COLOR_TITLE, TR("Luma3DS チェインローダー", "Luma3DS chainloader"));
+        drawString(true, 10, 10 + SPACING_Y, COLOR_TITLE, TR("A: 選ぶ   START: やめる", "Press A to select, START to quit"));
 
         for(u32 i = 0, posY = 10 + 3 * SPACING_Y, color = COLOR_RED; i < payloadNum; i++, posY += SPACING_Y)
         {
@@ -273,21 +274,21 @@ u32 firmRead(void *dest, u32 firmType)
 
     FILINFO info;
 
-    
+    //Parse the target directory
     while(f_readdir(&dir, &info) == FR_OK && info.fname[0] != 0)
     {
-        
+        //Not a cxi
         if(info.fname[9] != 'a' || strlen(info.fname) != 12) continue;
 
         u32 tempVersion = hexAtoi(info.altname, 8);
 
-        
+        //Found an older cxi
         if(tempVersion < firmVersion) firmVersion = tempVersion;
     }
 
     if(f_closedir(&dir) != FR_OK || firmVersion == 0xFFFFFFFF) goto exit;
 
-    
+    //Complete the string with the .app name
     sprintf(path, "%s/%08x.app", folderPath, firmVersion);
 
     if(fileRead(dest, path, 0x400000 + sizeof(Cxi) + 0x200) <= sizeof(Cxi) + 0x400) firmVersion = 0xFFFFFFFF;

@@ -111,11 +111,11 @@ GDB_DECLARE_HANDLER(ReadRegister)
     if(flags & THREADCONTEXT_CONTROL_CPU_GPRS)
         return GDB_SendHexPacket(ctx, &regs.cpu_registers.r[n], 4);
     else if(flags & THREADCONTEXT_CONTROL_CPU_SPRS)
-        return GDB_SendHexPacket(ctx, &regs.cpu_registers.sp + (n - 13), 4); 
+        return GDB_SendHexPacket(ctx, &regs.cpu_registers.sp + (n - 13), 4); // hacky
     else if(flags & THREADCONTEXT_CONTROL_FPU_GPRS)
         return GDB_SendHexPacket(ctx, &regs.fpu_registers.d[n], 8);
     else
-        return GDB_SendHexPacket(ctx, &regs.fpu_registers.fpscr + n, 4); 
+        return GDB_SendHexPacket(ctx, &regs.fpu_registers.fpscr + n, 4); // hacky
 }
 
 GDB_DECLARE_HANDLER(WriteRegister)
@@ -158,11 +158,11 @@ GDB_DECLARE_HANDLER(WriteRegister)
     if(flags & THREADCONTEXT_CONTROL_CPU_GPRS)
         regs.cpu_registers.r[n] = value;
     else if(flags & THREADCONTEXT_CONTROL_CPU_SPRS)
-        *(&regs.cpu_registers.sp + (n - 13)) = value; 
+        *(&regs.cpu_registers.sp + (n - 13)) = value; // hacky
     else if(flags & THREADCONTEXT_CONTROL_FPU_GPRS)
         memcpy(&regs.fpu_registers.d[n], &value64, 8);
     else
-        *(&regs.fpu_registers.fpscr + n) = value; 
+        *(&regs.fpu_registers.fpscr + n) = value; // hacky
 
     r = svcSetDebugThreadContext(ctx->debug, ctx->selectedThreadId, &regs, flags);
     if(R_FAILED(r))

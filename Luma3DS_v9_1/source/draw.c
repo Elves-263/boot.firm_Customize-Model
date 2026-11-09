@@ -24,7 +24,10 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Code to print to the screen by mid-kid @CakesFW
+*   https://github.com/mid-kid/CakesForeveryWan
+*/
 
 #include "draw.h"
 #include "strings.h"
@@ -43,7 +46,7 @@ bool loadSplash(void)
     bool isTopSplashValid = getFileSize(topSplashFile) == SCREEN_TOP_FBSIZE,
          isBottomSplashValid = getFileSize(bottomSplashFile) == SCREEN_BOTTOM_FBSIZE;
 
-    
+    //Don't delay boot nor init the screens if no splash images or invalid splash images are on the SD
     if(!isTopSplashValid && !isBottomSplashValid) return false;
 
     initScreens();
@@ -81,34 +84,138 @@ void drawCharacter(bool isTopScreen, u32 posX, u32 posY, u32 color, char charact
     }
 }
 
+// 日本語の字形（font_jp/mkfont_jp_ui.py で作る。M+ BITMAP FONTS の 10 ドット）
+typedef struct FontJpGlyph
+{
+    u16 code;
+    u16 flags;
+    u16 rows[10];
+} FontJpGlyph;
+
+#define FONTJP_GLYPH_WIDE 2     // 12 ドット幅（無ければ 6 ドット幅）
+
+#include "font_jp_ui.h"
+
+static const FontJpGlyph *findGlyph(u32 code)
+{
+    u32 lo = 0, hi = FONTJP_UI_COUNT;
+
+    while(lo < hi)
+    {
+        u32 mid = (lo + hi) / 2;
+        if(g_fontUi[mid].code == code) return &g_fontUi[mid];
+        if(g_fontUi[mid].code < code) lo = mid + 1;
+        else hi = mid;
+    }
+
+    return NULL;
+}
+
+// UTF-8 の 1 字を読む。UTF-8 として正しくないバイト（"Pok\x82mon" のような CP437 の字）は、そのバイトを 1 字とする
+static u32 decodeCharacter(const char *s, u32 *code)
+{
+    const u8 *p = (const u8 *)s;
+    u32 n;
+
+    if(p[0] >= 0xE0 && p[0] < 0xF0 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80)
+    {
+        *code = ((p[0] & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+        n = 3;
+    }
+    else if(p[0] >= 0xC2 && p[0] < 0xE0 && (p[1] & 0xC0) == 0x80)
+    {
+        *code = ((p[0] & 0x1F) << 6) | (p[1] & 0x3F);
+        n = 2;
+    }
+    else
+    {
+        *code = p[0];
+        n = 1;
+    }
+
+    return n;
+}
+
+// 1 字の幅（点）。ASCII と CP437 は SPACING_X、日本語は 12 か 6
+static u32 characterWidth(u32 code, u32 n, const FontJpGlyph **glyph)
+{
+    *glyph = n > 1 ? findGlyph(code) : NULL;
+    if(*glyph != NULL) return ((*glyph)->flags & FONTJP_GLYPH_WIDE) ? 12 : 6;
+    return SPACING_X;
+}
+
+// 日本語の字形は 10 ドットの高さなので、ASCII（8 ドット）より 1 ドット上から描く
+static void drawGlyph(bool isTopScreen, u32 posX, u32 posY, u32 color, const FontJpGlyph *glyph, u32 width)
+{
+    u8 *select = isTopScreen ? fbs[0].top_left : fbs[0].bottom;
+
+    for(u32 y = 0; y < 10; y++)
+        for(u32 x = 0; x < width; x++)
+            if((glyph->rows[y] >> (11 - x)) & 1)
+            {
+                u32 screenPos = (posX * SCREEN_HEIGHT * 3 + (SCREEN_HEIGHT - y - (posY - 1) - 1) * 3) + x * 3 * SCREEN_HEIGHT;
+
+                select[screenPos] = color >> 16;
+                select[screenPos + 1] = color >> 8;
+                select[screenPos + 2] = color;
+            }
+}
+
+u32 drawStringWidth(const char *string, u32 length)
+{
+    u32 width = 0;
+    const FontJpGlyph *glyph;
+
+    for(u32 i = 0; i < length && string[i] != 0 && string[i] != '\n';)
+    {
+        u32 code, n = decodeCharacter(string + i, &code);
+        width += string[i] == '\t' ? 2 * SPACING_X : characterWidth(code, n, &glyph);
+        i += n;
+    }
+
+    return width;
+}
+
 u32 drawString(bool isTopScreen, u32 posX, u32 posY, u32 color, const char *string)
 {
-    for(u32 i = 0, line_i = 0; i < strlen(string); i++)
+    u32 lineWidth = (isTopScreen ? SCREEN_TOP_WIDTH : SCREEN_BOTTOM_WIDTH) - posX;
+
+    // x は行の頭からの点の数
+    for(u32 i = 0, x = 0; string[i] != 0;)
+    {
+        u32 code, n = decodeCharacter(string + i, &code);
+        const FontJpGlyph *glyph;
+        u32 width = characterWidth(code, n, &glyph);
+
         switch(string[i])
         {
             case '\n':
                 posY += SPACING_Y;
-                line_i = 0;
+                x = 0;
                 break;
 
             case '\t':
-                line_i += 2;
+                x += 2 * SPACING_X;
                 break;
 
             default:
-                
-                if(line_i >= ((isTopScreen ? SCREEN_TOP_WIDTH : SCREEN_BOTTOM_WIDTH) - posX) / SPACING_X)
+                //Make sure we never get out of the screen
+                if(x + width > lineWidth)
                 {
                     posY += SPACING_Y;
-                    line_i = 1; 
-                    if(string[i] == ' ') break; 
+                    x = SPACING_X; //Little offset so we know the same string continues
+                    if(string[i] == ' ') break; //Spaces at the start look weird
                 }
 
-                drawCharacter(isTopScreen, posX + line_i * SPACING_X, posY, color, string[i]);
+                if(glyph != NULL) drawGlyph(isTopScreen, posX + x, posY, color, glyph, width);
+                else drawCharacter(isTopScreen, posX + x, posY, color, n > 1 ? '?' : string[i]);
 
-                line_i++;
+                x += width;
                 break;
         }
+
+        i += n;
+    }
 
     return posY;
 }

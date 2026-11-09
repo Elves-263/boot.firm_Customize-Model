@@ -29,14 +29,15 @@
 #include "menus/n3ds.h"
 #include "memory.h"
 #include "menu.h"
+#include "menus/lang.h"
 
 static char clkRateBuf[128 + 1];
 
 Menu N3DSMenu = {
-    "New 3DS menu",
+    TR("New 3DS メニュー", "New 3DS menu"),
     .nbItems = 2,
     {
-        { "Enable L2 cache", METHOD, .method = &N3DSMenu_EnableDisableL2Cache },
+        { TR("L2 キャッシュを有効にする", "Enable L2 cache"), METHOD, .method = &N3DSMenu_EnableDisableL2Cache },
         { clkRateBuf, METHOD, .method = &N3DSMenu_ChangeClockRate }
     }
 };
@@ -49,8 +50,8 @@ void N3DSMenu_UpdateStatus(void)
     svcGetSystemInfo(&higherClkRate, 0x10001, 1);
     svcGetSystemInfo(&L2CacheEnabled, 0x10001, 2);
 
-    N3DSMenu.items[0].title = L2CacheEnabled ? "Disable L2 cache" : "Enable L2 cache";
-    sprintf(clkRateBuf, "Set clock rate to %uMHz", clkRate != 268 ? 268 : (u32)higherClkRate);
+    N3DSMenu.items[0].title = L2CacheEnabled ? TR("L2 キャッシュを無効にする", "Disable L2 cache") : TR("L2 キャッシュを有効にする", "Enable L2 cache");
+    sprintf(clkRateBuf, TR("クロックを %uMHz にする", "Set clock rate to %uMHz"), clkRate != 268 ? 268 : (u32)higherClkRate);
 }
 
 void N3DSMenu_ChangeClockRate(void)

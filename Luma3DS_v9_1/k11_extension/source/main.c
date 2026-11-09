@@ -41,7 +41,7 @@ struct KExtParameters
     u32 L1MMUTableAddrs[4];
 
     CfwInfo cfwInfo;
-} kExtParameters = { .basePA = 0x12345678 }; 
+} kExtParameters = { .basePA = 0x12345678 }; // place this in .data
 
 void relocateAndSetupMMU(u32 coreId, u32 *L1Table)
 {
@@ -50,12 +50,12 @@ void relocateAndSetupMMU(u32 coreId, u32 *L1Table)
 
     if(coreId == 0)
     {
-        
+        // Relocate ourselves, and clear BSS
         memcpy((void *)p0->basePA, (const void *)0x18000000, __bss_start__ - __start__);
         memset32((u32 *)(p0->basePA + (__bss_start__ - __start__)), 0, __bss_end__ - __bss_start__);
 
-        
-        
+        // Map the kernel ext to 0x40000000
+        // 4KB extended small pages: [SYS:RW USR:-- X  TYP:NORMAL SHARED OUTER NOCACHE, INNER CACHED WB WA]
         for(u32 offset = 0; offset < (u32)(__end__ - __start__); offset += 0x1000)
             p->L2MMUTableFor0x40000000[offset >> 12] = (p0->basePA + offset) | 0x516;
 
@@ -64,9 +64,9 @@ void relocateAndSetupMMU(u32 coreId, u32 *L1Table)
     else
         __asm__ __volatile__ ("wfe");
 
-    
-    
-    u32 attribs = 0x40C02; 
+    // bit31 idea thanks to SALT
+    // Maps physmem so that, if addr is in physmem(0, 0x30000000), it can be accessed uncached&rwx as addr|(1<<31)
+    u32 attribs = 0x40C02; // supersection (rwx for all) of strongly ordered memory, shared
     for(u32 PA = 0; PA < 0x30000000; PA += 0x01000000)
     {
         u32 VA = (1 << 31) | PA;
@@ -93,7 +93,7 @@ void configHook(vu8 *cfgPage)
     *(vu32 *)(configPage + 0x40) = fcramLayout.applicationSize;
     *(vu32 *)(configPage + 0x44) = fcramLayout.systemSize;
     *(vu32 *)(configPage + 0x48) = fcramLayout.baseSize;
-    *isDevUnit = true; 
+    *isDevUnit = true; // enable debug features
 }
 
 void KProcessHwInfo__MapL1Section_Hook(void);
@@ -129,12 +129,12 @@ static void installMmuHooks(void)
             mapL1Section = loc;
     } while (mapL1Section == NULL);
 
-    mapL1Section[1] = 0xE28FE004; 
-    mapL1Section[2] = 0xE51FF004; 
+    mapL1Section[1] = 0xE28FE004; // add lr, pc, #4
+    mapL1Section[2] = 0xE51FF004; // ldr pc, [pc, #-4]
     mapL1Section[3] = (u32)KProcessHwInfo__MapL1Section_Hook;
 
-    mapL2Section[1] = 0xE28FE004; 
-    mapL2Section[2] = 0xE51FF004; 
+    mapL2Section[1] = 0xE28FE004; // add lr, pc, #4
+    mapL2Section[2] = 0xE51FF004; // ldr pc, [pc, #-4]
     mapL2Section[3] = (u32)KProcessHwInfo__MapL2Section_Hook;
 }
 
@@ -142,7 +142,7 @@ static void findUsefulSymbols(void)
 {
     u32 *off;
 
-    
+    // Patch ERRF__DumpException
     for(off = (u32 *)0xFFFF0000; *off != 0xE1A04005; ++off);
     ++off;
     *(u32 *)PA_FROM_VA_PTR(off) = makeARMBranch(off, off + 51, false);
@@ -171,7 +171,7 @@ static void findUsefulSymbols(void)
     for(; *off != 0xE320F000; off++);
     KProcessHandleTable__ToKAutoObject = (KAutoObject * (*)(KProcessHandleTable *, Handle))decodeARMBranch(off + 1);
 
-    for(off = (u32 *)decodeARMBranch(3 + (u32 *)officialSVCs[9]);   *off != 0xE5D42034; off++);
+    for(off = (u32 *)decodeARMBranch(3 + (u32 *)officialSVCs[9]); /* KThread::Terminate */ *off != 0xE5D42034; off++);
     off -= 2;
     criticalSectionLock = (KRecursiveLock *)off[2 + (off[0] & 0xFF) / 4];
     KRecursiveLock__Lock = (void (*)(KRecursiveLock *))decodeARMBranch(off + 1);
@@ -191,13 +191,13 @@ static void findUsefulSymbols(void)
     for(off = (u32 *)officialSVCs[0x24]; *off != 0xE59F004C; off++);
     WaitSynchronization1 = (Result (*)(void *, KThread *, KSynchronizationObject *, s64))decodeARMBranch(off + 6);
 
-    for(off = (u32 *)decodeARMBranch(3 + (u32 *)officialSVCs[0x33])   ; *off != 0xE1A05000; off++);
+    for(off = (u32 *)decodeARMBranch(3 + (u32 *)officialSVCs[0x33]) /* OpenProcess */ ; *off != 0xE1A05000; off++);
     KProcessHandleTable__CreateHandle = (Result (*)(KProcessHandleTable *, Handle *, KAutoObject *, u8))decodeARMBranch(off - 1);
 
-    for(off = (u32 *)decodeARMBranch(3 + (u32 *)officialSVCs[0x34])  ; *off != 0xD9001BF7; off++);
+    for(off = (u32 *)decodeARMBranch(3 + (u32 *)officialSVCs[0x34]) /* OpenThread */; *off != 0xD9001BF7; off++);
     threadList = *(KObjectList **)(off + 1);
 
-    off = (u32 *)decodeARMBranch((u32 *)officialSVCs[0x37] + 3) + 5;  
+    off = (u32 *)decodeARMBranch((u32 *)officialSVCs[0x37] + 3) + 5; /* GetThreadId */
     KProcessHandleTable__ToKThread = (KThread * (*)(KProcessHandleTable *, Handle))decodeARMBranch((*off >> 16) == 0xEB00 ? off : off + 2);
 
     for(off = (u32 *)officialSVCs[0x50]; off[0] != 0xE1A05000 || off[1] != 0xE2100102 || off[2] != 0x5A00000B; off++);
@@ -209,7 +209,7 @@ static void findUsefulSymbols(void)
     for(off = (u32 *)officialSVCs[0x71]; *off != 0xE2101102; off++);
     KProcessHwInfo__MapProcessMemory = (Result (*)(KProcessHwInfo *, KProcessHwInfo *, void *, void *, u32))decodeARMBranch(off - 1);
 
-    
+    // From 4.x to 6.x the pattern will match but the result will be wrong
     for(off = (u32 *)officialSVCs[0x72]; *off != 0xE2041102; off++);
     KProcessHwInfo__UnmapProcessMemory = (Result (*)(KProcessHwInfo *, void *, u32))decodeARMBranch(off - 1);
 
@@ -239,7 +239,7 @@ static void findUsefulSymbols(void)
     {
         if(*off == 0xE3520000)
         {
-            
+            // We're missing some funcs
             switch(n_cmp_0)
             {
                 case 1:
@@ -266,7 +266,7 @@ static void findUsefulSymbols(void)
         }
     }
 
-    
+    // The official prototype of ControlMemory doesn't have that extra param'
     ControlMemory = (Result (*)(u32 *, u32, u32, u32, MemOp, MemPerm, bool))
                     decodeARMBranch((u32 *)officialSVCs[0x01] + 5);
     SleepThread = (void (*)(s64))officialSVCs[0x0A];
@@ -294,9 +294,9 @@ static void findUsefulSymbols(void)
     for(; *off != 0x96007F9; off++);
     isDevUnit = *(bool **)(off - 1);
 
-    
+    ///////////////////////////////////////////
 
-    
+    // Shitty/lazy heuristic but it works on even 4.5, so...
     u32 textStart = ((u32)originalHandlers[2]) & ~0xFFFF;
     u32 rodataStart = (u32)(interruptManager->N3DS.privateInterrupts[1][0x1D].interruptEvent->vtable) & ~0xFFF;
     u32 textSize = rodataStart - textStart;
@@ -336,7 +336,7 @@ void main(FcramLayout *layout, KCoreContext *ctxs)
 
     memcpy(originalHandlers + 1, p->originalHandlers, 16);
     void **arm11SvcTable = (void**)originalHandlers[2];
-    while(*arm11SvcTable != NULL) arm11SvcTable++; 
+    while(*arm11SvcTable != NULL) arm11SvcTable++; //Look for SVC0 (NULL)
     memcpy(officialSVCs, arm11SvcTable, 4 * 0x7E);
 
     findUsefulSymbols();

@@ -2,7 +2,7 @@
 #include <3ds/types.h>
 #include "ifile.h"
 
-#define _3GX_MAGIC (0x3130303024584733)  
+#define _3GX_MAGIC (0x3130303024584733) /* "3GX$0001" */
 
 typedef struct PACKED
 {

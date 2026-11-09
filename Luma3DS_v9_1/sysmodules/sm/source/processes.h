@@ -24,7 +24,7 @@ typedef struct ProcessData
     u32 serviceAccessListSize;
 
     bool notificationEnabled;
-    
+    // Circular buffer
     u16 receivedNotificationIndex;
     u16 pendingNotificationIndex;
 

@@ -37,7 +37,7 @@ typedef enum GDBQueryDirection
     GDB_QUERY_DIRECTION_WRITE
 } GDBQueryDirection;
 
-
+// https://gcc.gnu.org/onlinedocs/gcc-5.3.0/cpp/Stringification.html
 #define xstr(s) str(s)
 #define str(s) #s
 
@@ -68,7 +68,7 @@ static const struct
 
 static int GDB_HandleQuery(GDBContext *ctx, GDBQueryDirection direction)
 {
-    char *nameBegin = ctx->commandData; 
+    char *nameBegin = ctx->commandData; // w/o leading 'q'/'Q'
     if(*nameBegin == 0)
         return GDB_ReplyErrno(ctx, EILSEQ);
 
@@ -93,7 +93,7 @@ static int GDB_HandleQuery(GDBContext *ctx, GDBQueryDirection direction)
         }
     }
 
-    return GDB_HandleUnsupported(ctx); 
+    return GDB_HandleUnsupported(ctx); // No handler found!
 }
 
 int GDB_HandleReadQuery(GDBContext *ctx)
@@ -114,7 +114,7 @@ GDB_DECLARE_QUERY_HANDLER(Supported)
         "QStartNoAckMode+;QThreadEvents+;QCatchSyscalls+;"
         "vContSupported+;swbreak+",
 
-        GDB_BUF_LEN 
+        GDB_BUF_LEN // should have been sizeof(ctx->buffer) but GDB memory functions are bugged
     );
 }
 

@@ -31,7 +31,7 @@
 
 typedef KSchedulableInterruptEvent* (*SGI0Handler_t)(KBaseInterruptEvent *this, u32 interruptID);
 
-
+// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0360f/CCHDIFIJ.html
 void executeFunctionOnCores(SGI0Handler_t func, u8 targetList, u8 targetListFilter);
 
 void KScheduler__TriggerCrossCoreInterrupt(KScheduler *this);
@@ -42,7 +42,7 @@ void rosalinaLockThread(KThread *thread);
 void rosalinaLockAllThreads(void);
 void rosalinaUnlockAllThreads(void);
 
-
+// Taken from ctrulib:
 
 static inline void __dsb(void)
 {

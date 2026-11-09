@@ -38,8 +38,8 @@
 extern Handle terminationRequestEvent;
 extern bool terminationRequest;
 
-
-
+// soc's poll function is odd, and doesn't like -1 as fd.
+// so this compacts everything together
 
 static void compact(struct sock_server *serv)
 {
@@ -208,7 +208,7 @@ void server_run(struct sock_server *serv)
 
             else if(fds[i].revents & POLLIN)
             {
-                if(curr_ctx->type == SOCK_SERVER) 
+                if(curr_ctx->type == SOCK_SERVER) // Listening socket?
                 {
                     struct sockaddr_in saddr;
                     socklen_t len = sizeof(struct sockaddr_in);
@@ -261,7 +261,7 @@ void server_run(struct sock_server *serv)
             compact(serv);
     }
 
-    
+    // Clean up.
     for(unsigned int i = 0; i < serv->nfds; i++)
     {
         if(fds[i].fd != -1)
@@ -307,8 +307,13 @@ bool    Wifi__IsConnected(void)
 {
     u32     status = 0;
     u32     wifistatus = 0;
+    bool    connected;
 
-    acInit();
-    return R_SUCCEEDED(ACU_GetWifiStatus(&wifistatus)) && wifistatus > 0
+    if (R_FAILED(acInit()))
+        return false;
+
+    connected = R_SUCCEEDED(ACU_GetWifiStatus(&wifistatus)) && wifistatus > 0
         && R_SUCCEEDED(ACU_GetStatus(&status)) && status != 1;
+    acExit();
+    return connected;
 }

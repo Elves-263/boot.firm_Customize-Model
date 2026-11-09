@@ -32,18 +32,19 @@
 #include "hbloader.h"
 #include "plgloader.h"
 #include "fmt.h"
-#include "utils.h" 
+#include "utils.h" // for makeARMBranch
 #include "minisoc.h"
 #include "ifile.h"
+#include "menus/lang.h"
 
 Menu miscellaneousMenu = {
-    "Miscellaneous options menu",
+    TR("その他の設定", "Miscellaneous options menu"),
     .nbItems = 4,
     {
-        { "Switch the hb. title to the current app.", METHOD, .method = &MiscellaneousMenu_SwitchBoot3dsxTargetTitle },
-        { "Change the menu combo", METHOD, .method = MiscellaneousMenu_ChangeMenuCombo },
-        { "Start InputRedirection", METHOD, .method = &MiscellaneousMenu_InputRedirection },
-        { "Save settings", METHOD, .method = &MiscellaneousMenu_SaveSettings },
+        { TR("hb. 用タイトルを今のアプリにする", "Switch the hb. title to the current app."), METHOD, .method = &MiscellaneousMenu_SwitchBoot3dsxTargetTitle },
+        { TR("メニューを開くボタンを変える", "Change the menu combo"), METHOD, .method = MiscellaneousMenu_ChangeMenuCombo },
+        { TR("InputRedirection を始める", "Start InputRedirection"), METHOD, .method = &MiscellaneousMenu_InputRedirection },
+        { TR("設定を保存", "Save settings"), METHOD, .method = &MiscellaneousMenu_SaveSettings },
     }
 };
 
@@ -76,7 +77,7 @@ void MiscellaneousMenu_SwitchBoot3dsxTargetTitle(void)
         if(R_SUCCEEDED(res) && ((u32)(titleId >> 32) == 0x00040010 || (u32)(titleId >> 32) == 0x00040000))
         {
             HBLDR_3DSX_TID = titleId;
-            miscellaneousMenu.items[0].title = "Switch the hb. title to hblauncher_loader";
+            miscellaneousMenu.items[0].title = TR("hb. 用タイトルを hblauncher_loader にする", "Switch the hb. title to hblauncher_loader");
         }
         else if(R_FAILED(res))
             sprintf(failureReason, "%08x", (u32)res);
@@ -90,7 +91,7 @@ void MiscellaneousMenu_SwitchBoot3dsxTargetTitle(void)
     {
         res = 0;
         HBLDR_3DSX_TID = HBLDR_DEFAULT_3DSX_TID;
-        miscellaneousMenu.items[0].title = "Switch the hb. title to the current app.";
+        miscellaneousMenu.items[0].title = TR("hb. 用タイトルを今のアプリにする", "Switch the hb. title to the current app.");
     }
 
     Draw_Lock();
@@ -100,10 +101,10 @@ void MiscellaneousMenu_SwitchBoot3dsxTargetTitle(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("その他の設定", "Miscellaneous options menu"));
 
         if(R_SUCCEEDED(res))
-            Draw_DrawString(10, 30, COLOR_WHITE, "Operation succeeded.");
+            Draw_DrawString(10, 30, COLOR_WHITE, TR("完了しました。", "Operation succeeded."));
         else
             Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (%s).", failureReason);
 
@@ -142,10 +143,10 @@ void MiscellaneousMenu_ChangeMenuCombo(void)
     MiscellaneousMenu_ConvertComboToString(comboStrOrig, menuCombo);
 
     Draw_Lock();
-    Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+    Draw_DrawString(10, 10, COLOR_TITLE, TR("その他の設定", "Miscellaneous options menu"));
 
-    posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current menu combo is:  %s", comboStrOrig);
-    posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "Please enter the new combo:");
+    posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, TR("今のボタン:  %s", "The current menu combo is:  %s"), comboStrOrig);
+    posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, TR("新しいボタンを押してください:", "Please enter the new combo:"));
 
     Draw_FlushFramebuffer();
     Draw_Unlock();
@@ -156,12 +157,12 @@ void MiscellaneousMenu_ChangeMenuCombo(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("その他の設定", "Miscellaneous options menu"));
 
-        posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, "The current menu combo is:  %s", comboStrOrig);
-        posY = Draw_DrawFormattedString(10, posY + SPACING_Y, COLOR_WHITE, "Please enter the new combo: %s", comboStr) + SPACING_Y;
+        posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, TR("今のボタン:  %s", "The current menu combo is:  %s"), comboStrOrig);
+        posY = Draw_DrawFormattedString(10, posY + SPACING_Y, COLOR_WHITE, TR("新しいボタンを押してください: %s", "Please enter the new combo: %s"), comboStr) + SPACING_Y;
 
-        posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, "Successfully changed the menu combo.");
+        posY = Draw_DrawString(10, posY + SPACING_Y, COLOR_WHITE, TR("メニューを開くボタンを変えました。", "Successfully changed the menu combo."));
 
         Draw_FlushFramebuffer();
         Draw_Unlock();
@@ -235,9 +236,9 @@ void MiscellaneousMenu_SaveSettings(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("その他の設定", "Miscellaneous options menu"));
         if(R_SUCCEEDED(res))
-            Draw_DrawString(10, 30, COLOR_WHITE, "Operation succeeded.");
+            Draw_DrawString(10, 30, COLOR_WHITE, TR("完了しました。", "Operation succeeded."));
         else
             Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (0x%08x).", res);
         Draw_FlushFramebuffer();
@@ -266,7 +267,7 @@ void MiscellaneousMenu_InputRedirection(void)
         if(res != 0)
             sprintf(buf, "Failed to stop InputRedirection (0x%08x).", (u32)res);
         else
-            miscellaneousMenu.items[2].title = "Start InputRedirection";
+            miscellaneousMenu.items[2].title = TR("InputRedirection を始める", "Start InputRedirection");
     }
     else
     {
@@ -294,13 +295,13 @@ void MiscellaneousMenu_InputRedirection(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("その他の設定", "Miscellaneous options menu"));
 
         if(!wasEnabled && cantStart)
             Draw_DrawString(10, 30, COLOR_WHITE, "Can't start the input redirection before the system\nhas finished loading.");
         else if(!wasEnabled)
         {
-            Draw_DrawString(10, 30, COLOR_WHITE, "Starting InputRedirection...");
+            Draw_DrawString(10, 30, COLOR_WHITE, TR("InputRedirection を起動しています...", "Starting InputRedirection..."));
             if(!done)
             {
                 res = InputRedirection_DoOrUndoPatches();
@@ -322,20 +323,20 @@ void MiscellaneousMenu_InputRedirection(void)
                 if(res != 0)
                     sprintf(buf, "Starting InputRedirection... failed (0x%08x).", (u32)res);
                 else
-                    miscellaneousMenu.items[2].title = "Stop InputRedirection";
+                    miscellaneousMenu.items[2].title = TR("InputRedirection を止める", "Stop InputRedirection");
 
                 done = true;
             }
 
             if(res == 0)
-                Draw_DrawString(10, 30, COLOR_WHITE, "Starting InputRedirection... OK.");
+                Draw_DrawString(10, 30, COLOR_WHITE, TR("InputRedirection を起動しています... 完了", "Starting InputRedirection... OK."));
             else
                 Draw_DrawString(10, 30, COLOR_WHITE, buf);
         }
         else
         {
             if(res == 0)
-                Draw_DrawString(10, 30, COLOR_WHITE, "InputRedirection stopped successfully.");
+                Draw_DrawString(10, 30, COLOR_WHITE, TR("InputRedirection を止めました。", "InputRedirection stopped successfully."));
             else
                 Draw_DrawString(10, 30, COLOR_WHITE, buf);
         }

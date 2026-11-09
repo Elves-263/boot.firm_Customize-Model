@@ -57,14 +57,15 @@ This code is based on a file that contains the following:
 #include <3ds/types.h>
 #include "memory.h"
 #include "fmt.h"
+#include "menus/lang.h"
 
-#define ZEROPAD   (1<<0) 
-#define SIGN      (1<<1) 
-#define PLUS      (1<<2) 
-#define SPACE     (1<<3) 
-#define LEFT      (1<<4) 
-#define HEX_PREP  (1<<5) 
-#define UPPERCASE (1<<6) 
+#define ZEROPAD   (1<<0) //Pad with zero
+#define SIGN      (1<<1) //Unsigned/signed long
+#define PLUS      (1<<2) //Show plus
+#define SPACE     (1<<3) //Spacer
+#define LEFT      (1<<4) //Left justified
+#define HEX_PREP  (1<<5) //0x
+#define UPPERCASE (1<<6) //'ABCDEF'
 
 #define IS_DIGIT(c) ((c) >= '0' && (c) <= '9')
 
@@ -148,6 +149,8 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 {
     char *str;
 
+    // 書式と %s の文字列は、TR() の組なら今の言語のほうを使う
+    fmt = Lang_Str(fmt);
     for(str = buf; *fmt; fmt++)
     {
         if(*fmt != '%')
@@ -156,8 +159,8 @@ int vsprintf(char *buf, const char *fmt, va_list args)
             continue;
         }
 
-        
-        u32 flags = 0; 
+        //Process flags
+        u32 flags = 0; //Flags to number()
         bool loop = true;
 
         while(loop)
@@ -173,8 +176,8 @@ int vsprintf(char *buf, const char *fmt, va_list args)
             }
         }
 
-        
-        s32 fieldWidth = -1; 
+        //Get field width
+        s32 fieldWidth = -1; //Width of output field
         if(IS_DIGIT(*fmt)) fieldWidth = skipAtoi(&fmt);
         else if(*fmt == '*')
         {
@@ -189,8 +192,8 @@ int vsprintf(char *buf, const char *fmt, va_list args)
             }
         }
 
-        
-        s32 precision = -1; 
+        //Get the precision
+        s32 precision = -1; //Min. # of digits for integers; max number of chars for from string
         if(*fmt == '.')
         {
             fmt++;
@@ -205,7 +208,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
             if(precision < 0) precision = 0;
         }
 
-        
+        //Get the conversion qualifier
         u32 integerType = 0;
         if(*fmt == 'l')
         {
@@ -238,7 +241,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 
             case 's':
             {
-                char *s = va_arg(args, char *);
+                const char *s = Lang_Str(va_arg(args, char *));
                 if(!s) s = "<NULL>";
                 u32 len = (precision != -1) ? strnlen(s, precision) : strlen(s);
                 if(!(flags & LEFT)) while((s32)len < fieldWidth--) *str++ = ' ';
@@ -256,11 +259,12 @@ int vsprintf(char *buf, const char *fmt, va_list args)
                 str = processNumber(str, va_arg(args, u32), true, fieldWidth, precision, flags);
                 continue;
 
-            
+            //Integer number formats - set up the flags and "break"
             case 'X':
                 flags |= UPPERCASE;
                 __attribute__((fallthrough));
                 
+                //Falls through
             case 'x':
                 isHex = true;
                 break;
@@ -270,6 +274,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
                 flags |= SIGN;
                 __attribute__((fallthrough));
                 
+                //Falls through
             case 'u':
                 isHex = false;
                 break;

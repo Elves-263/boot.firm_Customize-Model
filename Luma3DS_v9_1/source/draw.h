@@ -24,7 +24,10 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Code to print to the screen by mid-kid @CakesFW
+*      https://github.com/mid-kid/CakesForeveryWan/
+*/
 
 #pragma once
 
@@ -44,4 +47,6 @@
 bool loadSplash(void);
 void drawCharacter(bool isTopScreen, u32 posX, u32 posY, u32 color, char character);
 u32 drawString(bool isTopScreen, u32 posX, u32 posY, u32 color, const char *string);
+// string の length バイトまで（改行で止める）を描いたときの幅（点）
+u32 drawStringWidth(const char *string, u32 length);
 u32 drawFormattedString(bool isTopScreen, u32 posX, u32 posY, u32 color, const char *fmt, ...);

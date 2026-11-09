@@ -50,7 +50,7 @@ Result GetHandleInfoHook(s64 *out, Handle handle, u32 type)
 
         switch (type)
         {
-            case 0x10000: 
+            case 0x10000: ///< Get ctx id (should probably move it to GetProcessInfo)
             {
                 if(strcmp(classNameOfAutoObject(obj), "KDebug") == 0)
                     hwInfo = hwInfoOfProcess(((KDebug *)obj)->owner);
@@ -62,7 +62,7 @@ Result GetHandleInfoHook(s64 *out, Handle handle, u32 type)
                 *out = hwInfo != NULL ? KPROCESSHWINFO_GET_RVALUE(hwInfo, contextId) : -1;
                 break;
             }
-            case 0x10001: 
+            case 0x10001: ///< Get referenced object flags (token)
             {
                 KClassToken token;
 
@@ -70,7 +70,7 @@ Result GetHandleInfoHook(s64 *out, Handle handle, u32 type)
                 *out = token.flags;
                 break;
             }
-            case 0x10002: 
+            case 0x10002: ///< Get object owner
             {
                 Handle          hOut;
                 KClassToken     token;

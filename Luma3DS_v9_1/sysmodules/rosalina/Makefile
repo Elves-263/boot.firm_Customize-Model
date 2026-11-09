@@ -43,8 +43,16 @@ else
 endif
 # ---------------------------------------------------------------------------
 
+# 起動時に新しい版を確かめる GitHub のリポジトリ（所有者/名前）。空なら確かめない（build.bat で設定する）
+UPDATE_REPO ?=
+# 新しい方の Luma の版（13.5 など）。Luma3DS_new/UPSTREAM_VERSION に書いてある（build.bat も同じものを渡す）
+LUMA_NEW_VERSION ?= $(patsubst v%,%,$(strip $(shell cat "$(CURDIR)/../../../Luma3DS_new/UPSTREAM_VERSION")))
+
+# TR()（include/menus/lang.h）は日本語と英語を \0 でつないだ 1 つの文字列なので、書式の検査は日本語のほうだけになる
+# （-Wno-format-contains-nul）。英語のほうの書式は font_jp/chk_tr.py で日本語のほうと同じか確かめる
 CFLAGS := -Wall -Wextra $(WERROR) $(HARDERRORS) -MMD -MP -marm $(ASFLAGS) -mtp=soft -fno-builtin -std=c11 -O2 -ffast-math -mword-relocations \
-		-fomit-frame-pointer -ffunction-sections -fdata-sections $(INCLUDE) -I$(dir_include) -DARM11 -D_3DS
+		-fomit-frame-pointer -ffunction-sections -fdata-sections $(INCLUDE) -I$(dir_include) -I$(dir_source)/bearssl -DARM11 -D_3DS \
+		-DUPDATE_REPO="\"$(UPDATE_REPO)\"" -DLUMA_NEW_VERSION="\"$(LUMA_NEW_VERSION)\"" -Wno-format-contains-nul
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -mtp=soft -Wl,--section-start,.text=0x14000000 -Wl,--gc-sections
 
 objects = $(patsubst $(dir_source)/%.s, $(dir_build)/%.o, \
@@ -75,6 +83,8 @@ $(dir_build)/xml_data.h: $(xml_files)
 	)
 $(dir_build)/gdb/xfer.o: $(dir_build)/xml_data.h
 $(dir_build)/memory.o : CFLAGS += -O3
+# BearSSL（TLS）は大きいので、速さより大きさを優先する
+$(dir_build)/bearssl/%.o : CFLAGS += -Os
 
 $(dir_build)/%.o: $(dir_source)/%.c
 	@mkdir -p "$(@D)"

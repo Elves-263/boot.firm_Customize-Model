@@ -79,8 +79,8 @@ void GDB_RunMonitor(GDBServer *server)
                     ctx->eventToWaitFor = ctx->continuedEvent;
                 else if(res == -2)
                 {
-                    while(GDB_HandleDebugEvents(ctx) != -1) 
-                        svcSleepThread(1 * 1000 * 1000LL); 
+                    while(GDB_HandleDebugEvents(ctx) != -1) // until we've got all the remaining debug events
+                        svcSleepThread(1 * 1000 * 1000LL); // sleep just in case
 
                     svcClearEvent(ctx->clientAcceptedEvent);
                     ctx->eventToWaitFor = ctx->clientAcceptedEvent;

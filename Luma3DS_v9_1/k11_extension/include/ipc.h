@@ -33,7 +33,7 @@
 
 #define MAX_SESSION     345
 
-
+// the structure of sessions is apparently not the same on older versions...
 
 typedef struct SessionInfo
 {

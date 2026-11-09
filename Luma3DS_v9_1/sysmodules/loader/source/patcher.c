@@ -109,7 +109,7 @@ static inline void loadCustomVerString(u16 *out, u32 *verStringSize, u32 current
     static const u8 bom[] = {0xEF, 0xBB, 0xBF};
     u32 finalSize = 0;
 
-    
+    //Convert from UTF-8 to UTF-16 (Nintendo doesn't support 4-byte UTF-16, so 4-byte UTF-8 is unsupported)
     for(u32 increase, fileSizeTmp = (u32)fileSize, i = (fileSizeTmp > 2 && memcmp(buf, bom, 3) == 0) ? 3 : 0;
         i < fileSizeTmp && finalSize < 19; i += increase, finalSize++)
     {
@@ -203,11 +203,11 @@ static inline bool findLayeredFsPayloadOffset(u8 *code, u32 size, u32 roSize, u3
         roundedRoSize = ((roSize + 4095) & 0xFFFFF000),
         roundedDataSize = ((dataSize + 4095) & 0xFFFFF000);
 
-    
+    //First check for sufficient padding at the end of the .text segment
     if(roundedTextSize - size >= romfsredir_bin_size) *payloadOffset = size;
     else
     {
-        
+        //If there isn't enough padding look for the "throwFatalError" function to replace
         u32 svcConnectToPort = 0xFFFFFFFF;
 
         for(u32 addr = 4; svcConnectToPort == 0xFFFFFFFF && addr <= size - 4; addr += 4)
@@ -266,7 +266,8 @@ static inline bool findLayeredFsPayloadOffset(u8 *code, u32 size, u32 roSize, u3
 
 static inline bool applyCodeIpsPatch(u64 progId, u8 *code, u32 size)
 {
-     
+    /* Here we look for "/luma/titles/[u64 titleID in hex, uppercase]/code.ips"
+       If it exists it should be an IPS format patch */
 
     char path[] = "/luma/titles/0000000000000000/code.ips";
     progIdToStr(path + 28, progId);
@@ -324,7 +325,8 @@ exit:
 
 bool loadTitleCodeSection(u64 progId, u8 *code, u32 size)
 {
-     
+    /* Here we look for "/luma/titles/[u64 titleID in hex, uppercase]/code.bin"
+       If it exists it should be a decrypted and decompressed binary code file */
 
     char path[] = "/luma/titles/0000000000000000/code.bin";
     progIdToStr(path + 28, progId);
@@ -356,7 +358,8 @@ error:
 
 bool loadTitleExheader(u64 progId, exheader_header *exheader)
 {
-     
+    /* Here we look for "/luma/titles/[u64 titleID in hex, uppercase]/exheader.bin"
+       If it exists it should be a decrypted exheader */
 
     char path[] = "/luma/titles/0000000000000000/exheader.bin";
     progIdToStr(path + 28, progId);
@@ -388,7 +391,8 @@ error:
 
 static inline bool loadTitleLocaleConfig(u64 progId, u8 *mask, u8 *regionId, u8 *languageId, u8 *countryId, u8 *stateId)
 {
-     
+    /* Here we look for "/luma/titles/[u64 titleID in hex, uppercase]/locale.txt"
+       If it exists it should contain, for example, "EUR IT" */
 
     char path[] = "/luma/titles/0000000000000000/locale.txt";
     progIdToStr(path + 28, progId);
@@ -484,7 +488,8 @@ exit:
 
 static inline bool patchLayeredFs(u64 progId, u8 *code, u32 size, u32 textSize, u32 roSize, u32 dataSize, u32 roAddress, u32 dataAddress)
 {
-     
+    /* Here we look for "/luma/titles/[u64 titleID in hex, uppercase]/romfs"
+       If it exists it should be a folder containing ROMFS files */
 
     char path[] = "/luma/titles/0000000000000000/romfs";
     progIdToStr(path + 28, progId);
@@ -511,7 +516,7 @@ static inline bool patchLayeredFs(u64 progId, u8 *code, u32 size, u32 textSize, 
                                                "rom:" };
     u32 updateRomFsIndex;
 
-    
+    //Locate update RomFSes
     for(updateRomFsIndex = 0; updateRomFsIndex < sizeof(updateRomFsMounts) / sizeof(char *) - 1; updateRomFsIndex++)
     {
         u32 patternSize = strnlen(updateRomFsMounts[updateRomFsIndex], 255);
@@ -521,11 +526,11 @@ static inline bool patchLayeredFs(u64 progId, u8 *code, u32 size, u32 textSize, 
         if(memsearch(code, temp, size, patternSize + 1) != NULL) break;
     }
 
-    
+    //Setup the payload
     u8 *payload = code + payloadOffset;
     memcpy(payload, romfsredir_bin, romfsredir_bin_size);
 
-    
+    //Insert symbols in the payload
     u32 *payload32 = (u32 *)payload;
     for(u32 i = 0; i < romfsredir_bin_size / 4; i++)
     {
@@ -564,7 +569,7 @@ static inline bool patchLayeredFs(u64 progId, u8 *code, u32 size, u32 textSize, 
     memcpy(code + pathOffset, "lf:", 3);
     memcpy(code + pathOffset + 3, path, sizeof(path));
 
-    
+    //Place the hooks
     *(u32 *)(code + fsOpenFileDirectly) = MAKE_BRANCH(fsOpenFileDirectly, payloadOffset);
     *(u32 *)(code + fsTryOpenFile) = MAKE_BRANCH(fsTryOpenFile, payloadOffset + 12);
 
@@ -573,23 +578,23 @@ static inline bool patchLayeredFs(u64 progId, u8 *code, u32 size, u32 textSize, 
 
 void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 roSize, u32 dataSize, u32 roAddress, u32 dataAddress)
 {
-    if(progId == 0x0004003000008F02LL || 
-       progId == 0x0004003000008202LL || 
-       progId == 0x0004003000009802LL || 
-       progId == 0x000400300000A902LL || 
-       progId == 0x000400300000A102LL || 
-       progId == 0x000400300000B102LL) 
+    if(progId == 0x0004003000008F02LL || //USA Home Menu
+       progId == 0x0004003000008202LL || //JPN Home Menu
+       progId == 0x0004003000009802LL || //EUR Home Menu
+       progId == 0x000400300000A902LL || //KOR Home Menu
+       progId == 0x000400300000A102LL || //CHN Home Menu
+       progId == 0x000400300000B102LL) //TWN Home Menu
     {
         bool applyRegionFreePatch = true;
 
         switch(progId)
         {
-            case 0x0004003000008F02LL: 
-            case 0x0004003000008202LL: 
-            case 0x0004003000009802LL: 
+            case 0x0004003000008F02LL: //USA Home Menu
+            case 0x0004003000008202LL: //JPN Home Menu
+            case 0x0004003000009802LL: //EUR Home Menu
                 if(progVer <= 4) applyRegionFreePatch = false;
                 break;
-            case 0x000400300000A902LL: 
+            case 0x000400300000A902LL: //KOR Home Menu
                 if(!progVer) applyRegionFreePatch = false;
                 break;
         }
@@ -603,7 +608,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
                 0x01, 0x00, 0xA0, 0xE3, 0x1E, 0xFF, 0x2F, 0xE1
             };
 
-            
+            //Patch SMDH region check
             if(!patchMemory(code, textSize,
                     pattern,
                     sizeof(pattern), -31,
@@ -612,7 +617,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
                 )) goto error;
         }
 
-        
+        //Patch SMDH region check for manuals
         u32 i;
         for(i = 4; i < textSize; i += 4)
         {
@@ -626,7 +631,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
 
         if(i == textSize) goto error;
 
-        
+        //Patch DS flashcart whitelist check
         static const u8 pattern[] = {
             0x10, 0xD1, 0xE5, 0x08, 0x00, 0x8D
         };
@@ -641,16 +646,16 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
 
         u32 *off = (u32 *)(code + additive);
 
-        off[0] = 0xE3A00000; 
-        off[1] = 0xE12FFF1E; 
+        off[0] = 0xE3A00000; //mov r0, #0
+        off[1] = 0xE12FFF1E; //bx lr
     }
 
-    else if((progId == 0x0004001000021000LL || 
-             progId == 0x0004001000020000LL || 
-             progId == 0x0004001000022000LL || 
-             progId == 0x0004001000026000LL || 
-             progId == 0x0004001000027000LL || 
-             progId == 0x0004001000028000LL) 
+    else if((progId == 0x0004001000021000LL || //USA MSET
+             progId == 0x0004001000020000LL || //JPN MSET
+             progId == 0x0004001000022000LL || //EUR MSET
+             progId == 0x0004001000026000LL || //CHN MSET
+             progId == 0x0004001000027000LL || //KOR MSET
+             progId == 0x0004001000028000LL) //TWN MSET
             && CONFIG(PATCHVERSTRING))
     {
         static const u16 pattern[] = u"Ve";
@@ -687,7 +692,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
                                           (!currentNand ? verStringsSysEmu[currentFirm - 1] : verStringsEmuSys[currentNand - 1]);
         }
 
-        
+        //Patch Ver. string
         if(!patchMemory(code, textSize,
                 pattern,
                 sizeof(pattern) - 2, 0,
@@ -696,7 +701,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             )) goto error;
     }
 
-    else if(progId == 0x0004013000008002LL) 
+    else if(progId == 0x0004013000008002LL) //NS
     {
         if(progVer > 4)
         {
@@ -707,7 +712,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
                 0x0B, 0x18, 0x21, 0xC8
             };
 
-            
+            //Disable updates from foreign carts (makes carts region-free)
             u32 ret = patchMemory(code, textSize,
                           pattern,
                           sizeof(pattern), 0,
@@ -732,7 +737,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
 
                 if(off == NULL) goto error;
 
-                
+                //Patch N3DS CPU Clock and L2 cache setting
                 *(off - 4) = *(off - 3);
                 *(off - 3) = *(off - 1);
                 memcpy(off - 1, off, 16);
@@ -764,14 +769,14 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
 
         if(nbSection0Modules == 6)
         {
-            
+            // Makes ErrDisp to not start up
             static const u64 errDispTid = 0x0004003000008A02ULL;
             u32 *errDispTidLoc = (u32 *)memsearch(code, &errDispTid, size, sizeof(errDispTid));
-            *(errDispTidLoc - 6) = 0xE3A00000; 
+            *(errDispTidLoc - 6) = 0xE3A00000; // mov r0, #0
         }
     }
 
-    else if(progId == 0x0004013000001702LL) 
+    else if(progId == 0x0004013000001702LL) //CFG
     {
         static const u8 pattern[] = {
             0x06, 0x46, 0x10, 0x48
@@ -780,7 +785,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             0x00, 0x26
         };
 
-        
+        //Disable SecureInfo signature check
         if(!patchMemory(code, textSize,
                 pattern,
                 sizeof(pattern), 0,
@@ -793,7 +798,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             static const u16 pattern[] = u"Sec",
                              patch[] = u"C";
 
-            
+            //Use SecureInfo_C
             if(patchMemory(code + ((textSize + 4095) & 0xFFFFF000), roSize,
                    pattern,
                    sizeof(pattern) - 2, 22,
@@ -803,7 +808,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
         }
     }
 
-    else if(progId == 0x0004013000003702LL && progVer > 0) 
+    else if(progId == 0x0004013000003702LL && progVer > 0) //RO
     {
         static const u8 pattern[] = {
             0x20, 0xA0, 0xE1, 0x8B
@@ -815,10 +820,10 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             0x2D, 0xE9, 0x01, 0x70
         },
                         patch[] = {
-            0x00, 0x00, 0xA0, 0xE3, 0x1E, 0xFF, 0x2F, 0xE1 
+            0x00, 0x00, 0xA0, 0xE3, 0x1E, 0xFF, 0x2F, 0xE1 //mov r0, #0; bx lr
         };
 
-        
+        //Disable CRR0 signature (RSA2048 with SHA256) check and CRO0/CRR0 SHA256 hash checks (section hashes, and hash table)
         if(!patchMemory(code, textSize,
                 pattern,
                 sizeof(pattern), -9,
@@ -839,7 +844,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             )) goto error;
     }
 
-    else if(progId == 0x0004013000002802LL) 
+    else if(progId == 0x0004013000002802LL) //DLP
     {
         static const u8 pattern[] = {
             0x0C, 0xAC, 0xC0, 0xD8
@@ -848,7 +853,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             0x00, 0x00, 0x00, 0x00
         };
 
-        
+        //Patch DLP region check
         if(!patchMemory(code, textSize,
                 pattern,
                 sizeof(pattern), 0,
@@ -857,7 +862,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             )) goto error;
     }
 
-    else if(progId == 0x0004013000001A02LL) 
+    else if(progId == 0x0004013000001A02LL) //DSP
     {
         static const u8 pattern[] = {
             0xE3, 0x10, 0x10, 0x80, 0xE2
@@ -866,7 +871,7 @@ void patchCode(u64 progId, u16 progVer, u8 *code, u32 size, u32 textSize, u32 ro
             0x00, 0x20, 0xA0, 0xE3
         };
 
-        
+        //Patch DSP signature check
         if(!patchMemory(code, textSize,
                 pattern,
                 sizeof(pattern), -3,

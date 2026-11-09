@@ -179,7 +179,10 @@ void GDB_ReleaseClient(GDBServer *server, GDBContext *ctx)
 
     RecursiveLock_Lock(&ctx->lock);
 
-     
+    /*
+        There's a possibility of a race condition with a possible user exception handler, but you shouldn't
+        use 'kill' on APPLICATION titles in the first place (reboot hanging because the debugger is still running, etc).
+    */
 
     ctx->continueFlags = (DebugFlags)0;
 

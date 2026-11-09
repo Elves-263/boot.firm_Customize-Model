@@ -17,7 +17,7 @@ Result srvHandleCommands(SessionData *sessionData)
     u32 *cmdbuf = getThreadCommandBuffer();
     switch(cmdbuf[0] >> 16)
     {
-        case 1: 
+        case 1: // RegisterClient
         {
             if(cmdbuf[0] == IPC_MakeHeader(1, 0, 2) && cmdbuf[1] == IPC_Desc_CurProcessHandle())
             {
@@ -30,7 +30,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 2: 
+        case 2: // EnableNotification
         {
             Handle notificationSemaphore = 0;
             res = EnableNotification(sessionData, &notificationSemaphore);
@@ -41,7 +41,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 3: 
+        case 3: // RegisterService
         {
             Handle serverPort = 0;
             res = RegisterService(sessionData, &serverPort, (const char *)(cmdbuf + 1), (s32)cmdbuf[3], (s32)cmdbuf[4]);
@@ -52,7 +52,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 4: 
+        case 4: // UnregisterService
         {
             res = UnregisterService(sessionData, (const char *)(cmdbuf + 1), (s32)cmdbuf[3]);
             cmdbuf[0] = IPC_MakeHeader(4, 1, 0);
@@ -60,7 +60,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 5: 
+        case 5: // GetServiceHandle
         {
             Handle session = 0;
             res = GetServiceHandle(sessionData, &session, (const char *)(cmdbuf + 1), (s32)cmdbuf[3], cmdbuf[4]);
@@ -76,7 +76,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 6: 
+        case 6: // RegisterPort
         {
             if(cmdbuf[0] == IPC_MakeHeader(6, 3, 2) && cmdbuf[4] == IPC_Desc_SharedHandles(1))
             {
@@ -89,7 +89,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 7: 
+        case 7: // UnregisterPort
         {
             res = UnregisterPort(sessionData, (const char *)(cmdbuf + 1), (s32)cmdbuf[3]);
             cmdbuf[0] = IPC_MakeHeader(7, 1, 0);
@@ -97,7 +97,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 8: 
+        case 8: // GetPort
         {
             Handle port = 0;
             res = GetPort(sessionData, &port, (const char *)(cmdbuf + 1), (s32)cmdbuf[3], (u8)cmdbuf[4]);
@@ -113,7 +113,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 9: 
+        case 9: // Subscribe
         {
             res = Subscribe(sessionData, cmdbuf[1]);
             cmdbuf[0] = IPC_MakeHeader(9, 1, 0);
@@ -121,7 +121,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 10: 
+        case 10: // Unsubscribe
         {
             res = Unsubscribe(sessionData, cmdbuf[1]);
             cmdbuf[0] = IPC_MakeHeader(10, 1, 0);
@@ -129,7 +129,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 11: 
+        case 11: // ReceiveNotification
         {
             u32 notificationId;
             res = ReceiveNotification(sessionData, &notificationId);
@@ -139,7 +139,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 12: 
+        case 12: // PublishToSubscriber
         {
             res = PublishToSubscriber(cmdbuf[1], cmdbuf[2]);
             cmdbuf[0] = IPC_MakeHeader(12, 1, 0);;
@@ -147,7 +147,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 13: 
+        case 13: // PublishAndGetSubscriber
         {
             u32 pidCount;
             res = PublishAndGetSubscriber(&pidCount, cmdbuf + 3, cmdbuf[1], 0);
@@ -157,7 +157,7 @@ Result srvHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 14: 
+        case 14: // IsServiceRegistered
         {
             bool isRegistered;
             res = IsServiceRegistered(sessionData, &isRegistered, (const char *)(cmdbuf + 1), (s32)cmdbuf[3]);

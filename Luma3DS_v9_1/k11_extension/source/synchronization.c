@@ -37,7 +37,7 @@ void executeFunctionOnCores(SGI0Handler_t handler, u8 targetList, u8 targetListF
     SGI0Handler = handler;
 
     if(targetListFilter == 0 && (targetListFilter & (1 << coreID)) != 0)
-        __enable_irq(); 
+        __enable_irq(); // make sure interrupts aren't masked
     MPCORE_GID_SGI = (targetListFilter << 24) | (targetList << 16) | 0;
 }
 
@@ -56,7 +56,7 @@ void KThread__DebugReschedule(KThread *this, bool lock)
     KRecursiveLock__Lock(criticalSectionLock);
 
     u32 oldSchedulingMask = this->schedulingMask;
-    if(lock) 
+    if(lock) // the original k11 function discards the other flags
         this->schedulingMask |= 0x80;
     else
         this->schedulingMask &= ~0x80;
@@ -151,7 +151,7 @@ void rosalinaUnlockAllThreads(void)
     {
         KThread *thread = (KThread *)node->key;
 
-        if((thread->schedulingMask & 0xF) == 2) 
+        if((thread->schedulingMask & 0xF) == 2) // thread is terminating
             continue;
 
         if(thread->schedulingMask & 0x40)

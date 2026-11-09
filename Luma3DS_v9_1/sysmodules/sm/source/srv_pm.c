@@ -24,7 +24,7 @@ Result srvPmHandleCommands(SessionData *sessionData)
 
     switch((cmdbuf[0] >> 16) & ~mask)
     {
-        case 1: 
+        case 1: // PublishToProcess
         {
             if(cmdbuf[0] == IPC_MakeHeader(mask | 1, 1, 2) && cmdbuf[2] == IPC_Desc_SharedHandles(1))
             {
@@ -37,7 +37,7 @@ Result srvPmHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 2: 
+        case 2: // PublishToAll
         {
             res = PublishToAll(cmdbuf[1]);
             cmdbuf[0] = IPC_MakeHeader(mask | 2, 1, 0);
@@ -45,7 +45,7 @@ Result srvPmHandleCommands(SessionData *sessionData)
             break;
         }
 
-        case 3: 
+        case 3: // RegisterProcess
         {
             if(cmdbuf[0] == IPC_MakeHeader(mask | 3, 2, 2) && (cmdbuf[3] & 0x3C0F) == (IPC_Desc_StaticBuffer(0x110, 0) & 0x3C0F))
             {

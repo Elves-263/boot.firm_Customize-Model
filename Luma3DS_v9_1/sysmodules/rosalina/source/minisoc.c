@@ -38,7 +38,7 @@ static Result SOCU_Initialize(Handle memhandle, u32 memsize)
     Result ret = 0;
     u32 *cmdbuf = getThreadCommandBuffer();
 
-    cmdbuf[0] = IPC_MakeHeader(0x1,1,4); 
+    cmdbuf[0] = IPC_MakeHeader(0x1,1,4); // 0x10044
     cmdbuf[1] = memsize;
     cmdbuf[2] = IPC_Desc_CurProcessHandle();
     cmdbuf[4] = IPC_Desc_SharedHandles(1);
@@ -56,7 +56,7 @@ static Result SOCU_Shutdown(void)
     Result ret = 0;
     u32 *cmdbuf = getThreadCommandBuffer();
 
-    cmdbuf[0] = IPC_MakeHeader(0x19,0,0); 
+    cmdbuf[0] = IPC_MakeHeader(0x19,0,0); // 0x190000
 
     ret = svcSendSyncRequest(SOCU_handle);
     if(ret != 0)
@@ -68,8 +68,8 @@ static Result SOCU_Shutdown(void)
 static s32 miniSocRefCount = 0;
 static u32 socContextAddr = 0x08000000;
 static u32 socContextSize = 0x60000;
-
-
+// SOCU_handle from ctrulib
+// socMemhandle from ctrulib
 
 bool miniSocEnabled = false;
 
@@ -163,20 +163,20 @@ int socSocket(int domain, int type, int protocol)
 
     u32 *cmdbuf = getThreadCommandBuffer();
 
-    
+    // The protocol on the 3DS *must* be 0 to work
     // To that end, when appropriate, we will make the change for the user
     if (domain == AF_INET
     && type == SOCK_STREAM
     && protocol == IPPROTO_TCP) {
-        protocol = 0; 
+        protocol = 0; // TCP is the only option, so 0 will work as expected
     }
     if (domain == AF_INET
     && type == SOCK_DGRAM
     && protocol == IPPROTO_UDP) {
-        protocol = 0; 
+        protocol = 0; // UDP is the only option, so 0 will work as expected
     }
 
-    cmdbuf[0] = IPC_MakeHeader(0x2,3,2); 
+    cmdbuf[0] = IPC_MakeHeader(0x2,3,2); // 0x200C2
     cmdbuf[1] = domain;
     cmdbuf[2] = type;
     cmdbuf[3] = protocol;
@@ -185,7 +185,7 @@ int socSocket(int domain, int type, int protocol)
     ret = svcSendSyncRequest(SOCU_handle);
     if(ret != 0)
     {
-        
+        //errno = SYNC_ERROR;
         return ret;
     }
 
@@ -193,8 +193,8 @@ int socSocket(int domain, int type, int protocol)
     if(ret == 0) ret = cmdbuf[2];
     if(ret < 0)
     {
-        
-        
+        //if(cmdbuf[1] == 0)errno = _net_convert_error(ret);
+        //if(cmdbuf[1] != 0)errno = SYNC_ERROR;
         return -1;
     }
     else
@@ -217,7 +217,7 @@ int socBind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     if(addrlen < tmp_addrlen)
     {
-        
+        //errno = EINVAL;
         return -1;
     }
 
@@ -225,7 +225,7 @@ int socBind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
     tmpaddr[1] = addr->sa_family;
     memcpy(&tmpaddr[2], &addr->sa_data, tmp_addrlen-2);
 
-    cmdbuf[0] = IPC_MakeHeader(0x5,2,4); 
+    cmdbuf[0] = IPC_MakeHeader(0x5,2,4); // 0x50084
     cmdbuf[1] = (u32)sockfd;
     cmdbuf[2] = (u32)tmp_addrlen;
     cmdbuf[3] = IPC_Desc_CurProcessHandle();
@@ -234,7 +234,7 @@ int socBind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 
     ret = svcSendSyncRequest(SOCU_handle);
     if(ret != 0) {
-        
+        //errno = SYNC_ERROR;
         return ret;
     }
 
@@ -243,7 +243,7 @@ int socBind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
         ret = _net_convert_error(cmdbuf[2]);
 
     if(ret < 0) {
-        
+        //errno = -ret;
         return -1;
     }
 
@@ -255,7 +255,7 @@ int socListen(int sockfd, int max_connections)
     Result ret = 0;
     u32 *cmdbuf = getThreadCommandBuffer();
 
-    cmdbuf[0] = IPC_MakeHeader(0x3,2,2); 
+    cmdbuf[0] = IPC_MakeHeader(0x3,2,2); // 0x30082
     cmdbuf[1] = (u32)sockfd;
     cmdbuf[2] = (u32)max_connections;
     cmdbuf[3] = IPC_Desc_CurProcessHandle();
@@ -263,7 +263,7 @@ int socListen(int sockfd, int max_connections)
     ret = svcSendSyncRequest(SOCU_handle);
     if(ret != 0)
     {
-        
+        //errno = SYNC_ERROR;
         return ret;
     }
 
@@ -272,7 +272,7 @@ int socListen(int sockfd, int max_connections)
         ret = _net_convert_error(cmdbuf[2]);
 
     if(ret < 0) {
-        
+        //errno = -ret;
         return -1;
     }
 
@@ -290,7 +290,7 @@ int socAccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 
     memset(tmpaddr, 0, 0x1c);
 
-    cmdbuf[0] = IPC_MakeHeader(0x4,2,2); 
+    cmdbuf[0] = IPC_MakeHeader(0x4,2,2); // 0x40082
     cmdbuf[1] = (u32)sockfd;
     cmdbuf[2] = (u32)tmp_addrlen;
     cmdbuf[3] = IPC_Desc_CurProcessHandle();
@@ -314,8 +314,8 @@ int socAccept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
     if(ret == 0)
         ret = _net_convert_error(cmdbuf[2]);
 
-    
-        
+    // if(ret < 0)
+        //errno = -ret;
 
     if(ret >= 0 && addr != NULL)
     {
@@ -347,7 +347,7 @@ int socPoll(struct pollfd *fds, nfds_t nfds, int timeout)
         fds[i].revents = 0;
     }
 
-    cmdbuf[0] = IPC_MakeHeader(0x14,2,4); 
+    cmdbuf[0] = IPC_MakeHeader(0x14,2,4); // 0x140084
     cmdbuf[1] = (u32)nfds;
     cmdbuf[2] = (u32)timeout;
     cmdbuf[3] = IPC_Desc_CurProcessHandle();
@@ -375,7 +375,7 @@ int socPoll(struct pollfd *fds, nfds_t nfds, int timeout)
         ret = _net_convert_error(cmdbuf[2]);
 
     if(ret < 0) {
-        
+        //errno = -ret;
         return -1;
     }
 
@@ -387,13 +387,13 @@ int socClose(int sockfd)
     int ret = 0;
     u32 *cmdbuf = getThreadCommandBuffer();
 
-    cmdbuf[0] = IPC_MakeHeader(0xB,1,2); 
+    cmdbuf[0] = IPC_MakeHeader(0xB,1,2); // 0xB0042
     cmdbuf[1] = (u32)sockfd;
     cmdbuf[2] = IPC_Desc_CurProcessHandle();
 
     ret = svcSendSyncRequest(SOCU_handle);
     if(ret != 0) {
-        
+        //errno = SYNC_ERROR;
         return ret;
     }
 
@@ -402,7 +402,7 @@ int socClose(int sockfd)
         ret =_net_convert_error(cmdbuf[2]);
 
     if(ret < 0) {
-        
+        //errno = -ret;
         return -1;
     }
 
@@ -414,7 +414,7 @@ int socSetsockopt(int sockfd, int level, int optname, const void *optval, sockle
     int ret = 0;
     u32 *cmdbuf = getThreadCommandBuffer();
 
-    cmdbuf[0] = IPC_MakeHeader(0x12,4,4); 
+    cmdbuf[0] = IPC_MakeHeader(0x12,4,4); // 0x120104
     cmdbuf[1] = (u32)sockfd;
     cmdbuf[2] = (u32)level;
     cmdbuf[3] = (u32)optname;
@@ -433,11 +433,96 @@ int socSetsockopt(int sockfd, int level, int optname, const void *optval, sockle
         ret = _net_convert_error(cmdbuf[2]);
 
     if(ret < 0) {
-        
+        //errno = -ret;
         return -1;
     }
 
     return ret;
+}
+
+// v13.4 の minisoc.c から（更新の確認で GitHub に繋ぐため）
+int socConnect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    int ret = 0;
+    socklen_t tmp_addrlen = 0;
+    u32 *cmdbuf = getThreadCommandBuffer();
+    u8 tmpaddr[0x1c];
+
+    memset(tmpaddr, 0, 0x1c);
+
+    if(addr->sa_family == AF_INET)
+        tmp_addrlen = 8;
+    else
+        tmp_addrlen = 0x1c;
+
+    if(addrlen < tmp_addrlen)
+        return -1;
+
+    tmpaddr[0] = tmp_addrlen;
+    tmpaddr[1] = addr->sa_family;
+    memcpy(&tmpaddr[2], &addr->sa_data, tmp_addrlen-2);
+
+    cmdbuf[0] = IPC_MakeHeader(0x6,2,4); // 0x60084
+    cmdbuf[1] = (u32)sockfd;
+    cmdbuf[2] = (u32)addrlen;
+    cmdbuf[3] = IPC_Desc_CurProcessHandle();
+    cmdbuf[5] = IPC_Desc_StaticBuffer(tmp_addrlen,0);
+    cmdbuf[6] = (u32)tmpaddr;
+
+    ret = svcSendSyncRequest(SOCU_handle);
+    if(ret != 0) return -1;
+
+    ret = (int)cmdbuf[1];
+    if(ret == 0)
+        ret = _net_convert_error(cmdbuf[2]);
+
+    if(ret < 0)
+        return -1;
+
+    return 0;
+}
+
+// libctru の gethostbyname と同じ要求（結果の 4 バイト目に件数、0x1908 からアドレスが 16 バイトずつ並ぶ）
+int socGethostbyname(const char *name, u32 *addr, void *outbuf)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    u32 *staticbufs = getThreadStaticBuffers();
+    u32 saved_threadstorage[2];
+    u32 len = strlen(name) + 1;
+    u32 count;
+    int ret;
+
+    cmdbuf[0] = IPC_MakeHeader(0xD,2,2); // 0xD0082
+    cmdbuf[1] = len;
+    cmdbuf[2] = SOC_HOSTENT_BUFFER_SIZE;
+    cmdbuf[3] = IPC_Desc_StaticBuffer(len, 3);
+    cmdbuf[4] = (u32)name;
+
+    saved_threadstorage[0] = staticbufs[0];
+    saved_threadstorage[1] = staticbufs[1];
+    staticbufs[0] = IPC_Desc_StaticBuffer(SOC_HOSTENT_BUFFER_SIZE, 0);
+    staticbufs[1] = (u32)outbuf;
+
+    ret = svcSendSyncRequest(SOCU_handle);
+
+    staticbufs[0] = saved_threadstorage[0];
+    staticbufs[1] = saved_threadstorage[1];
+
+    if(ret != 0)
+        return -1;
+
+    ret = (int)cmdbuf[1];
+    if(ret == 0)
+        ret = _net_convert_error(cmdbuf[2]);
+    if(ret < 0)
+        return -1;
+
+    memcpy(&count, (u8 *)outbuf + 4, sizeof(count));
+    if(count == 0)
+        return -1;
+
+    memcpy(addr, (u8 *)outbuf + 0x1908, sizeof(*addr));
+    return 0;
 }
 
 ssize_t soc_recv(int sockfd, void *buf, size_t len, int flags)

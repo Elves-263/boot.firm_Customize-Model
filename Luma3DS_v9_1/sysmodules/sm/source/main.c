@@ -42,7 +42,7 @@ void __appInit(void)
 }
 
 
-
+// this is called after main exits
 void __appExit(void){}
 
 void __system_allocateHeaps(void){}
@@ -91,12 +91,12 @@ int main(void)
     {
         s32 id;
         if(replyTarget == 0)
-            cmdbuf[0] = 0xFFFF0000; 
+            cmdbuf[0] = 0xFFFF0000; // Kernel11
 
         res = svcReplyAndReceive(&id, handles, nbHandles, replyTarget);
-        if(res == (Result)0xC920181A) 
+        if(res == (Result)0xC920181A) // unreachable remote
         {
-            
+            // Note: if a process has ended, pm will call UnregisterProcess on it
             if(id < 0)
             {
                 for(id = 3; (u32)id < nbHandles && handles[id] != replyTarget; id++);
@@ -106,7 +106,7 @@ int main(void)
 
             if(id < 3)
                 panic();
-            else if((u32)id < 3 + nbSessions) 
+            else if((u32)id < 3 + nbSessions) // Session closed
             {
                 sessionData = NULL;
                 for(u32 i = 0; i < sizeof(sessionDataPool) / sizeof(SessionData); i++)
@@ -117,7 +117,7 @@ int main(void)
 
                 if(sessionData != NULL)
                 {
-                    if(sessionData->busyClientPortHandle != 0) 
+                    if(sessionData->busyClientPortHandle != 0) // remove unreferenced client port handles from array
                     {
                         u32 refCount = 0;
                         for(u32 i = 0; i < sizeof(sessionDataPool) / sizeof(SessionData); i++)
@@ -146,17 +146,17 @@ int main(void)
                 else
                     panic();
             }
-            else 
+            else // Port closed
             {
                 SessionData *nextSessionData = NULL;
 
-                
+                // Update the command postponing reason accordingly
                 for(sessionData = sessionDataWaitingPortReadyList.first; sessionData != NULL; sessionData = nextSessionData)
                 {
                     nextSessionData = sessionData->next;
                     if(sessionData->busyClientPortHandle == handles[id])
                     {
-                        sessionData->replayCmdbuf[1] = 0xD0406401; 
+                        sessionData->replayCmdbuf[1] = 0xD0406401; // unregistered service or named port
                         moveNode(sessionData, &sessionDataWaitingForServiceOrPortRegisterList, true);
                         svcCloseHandle(handles[id]);
                         handles[id] = handles[--nbHandles];
@@ -172,7 +172,7 @@ int main(void)
         else
         {
             replyTarget = 0;
-            if(id == 1) 
+            if(id == 1) // New srv: session
             {
                 Handle session;
                 assertSuccess(svcAcceptSession(&session, srvPort));
@@ -184,7 +184,7 @@ int main(void)
                 handles[3 + nbSessions++] = session;
                 ++nbHandles;
             }
-            else if(id == 2) 
+            else if(id == 2) // New srv:pm session
             {
                 Handle session;
                 if(!IS_PRE_7X && nbSrvPmSessions >= 1)
@@ -202,7 +202,7 @@ int main(void)
             }
             else
             {
-                if(id == 0) 
+                if(id == 0) // Resume SRV:GetServiceHandle or GetPort due to service or named port not registered
                 {
                     if(sessionDataToWakeUpAfterServiceOrPortRegisterList.first == NULL)
                         panic();
@@ -216,7 +216,7 @@ int main(void)
                         ++nbSrvPmSessions;
                     memcpy(cmdbuf, sessionData->replayCmdbuf, 16);
                 }
-                else if((u32)id >= 3 + nbSessions) 
+                else if((u32)id >= 3 + nbSessions) // Resume SRV:GetServiceHandle if service was full
                 {
                     SessionData *sTmp;
                     for(sessionData = sessionDataWaitingPortReadyList.first; sessionData != NULL && sessionData->busyClientPortHandle != handles[id];
@@ -252,9 +252,9 @@ int main(void)
                 if(R_MODULE(res) == RM_SRV && R_SUMMARY(res) == RS_WOULDBLOCK)
                 {
                     SessionDataList *dstList = NULL;
-                    if(res == (Result)0xD0406401) 
+                    if(res == (Result)0xD0406401) // service or named port not registered yet
                         dstList = &sessionDataWaitingForServiceOrPortRegisterList;
-                    else if(res == (Result)0xD0406402) 
+                    else if(res == (Result)0xD0406402) // service full
                     {
                         u32 i;
                         dstList = &sessionDataWaitingPortReadyList;

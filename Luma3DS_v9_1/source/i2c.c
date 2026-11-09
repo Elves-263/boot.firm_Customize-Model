@@ -24,12 +24,14 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Thanks to whoever contributed in the development of this file
+*/
 
 #include "utils.h"
 #include "i2c.h"
 
-
+//-----------------------------------------------------------------------------
 
 static const struct { u8 bus_id, reg_addr; } dev_data[] = {
     {0, 0x4A}, {0, 0x7A}, {0, 0x78},
@@ -49,7 +51,7 @@ static inline u8 i2cGetDeviceRegAddr(u8 device_id)
     return dev_data[device_id].reg_addr;
 }
 
-
+//-----------------------------------------------------------------------------
 
 static vu8 *reg_data_addrs[] = {
     (vu8 *)(I2C1_REG_OFF + I2C_REG_DATA),
@@ -62,7 +64,7 @@ static inline vu8 *i2cGetDataReg(u8 bus_id)
     return reg_data_addrs[bus_id];
 }
 
-
+//-----------------------------------------------------------------------------
 
 static vu8 *reg_cnt_addrs[] = {
     (vu8 *)(I2C1_REG_OFF + I2C_REG_CNT),
@@ -75,7 +77,7 @@ static inline vu8 *i2cGetCntReg(u8 bus_id)
     return reg_cnt_addrs[bus_id];
 }
 
-
+//-----------------------------------------------------------------------------
 
 static inline void i2cWaitBusy(u8 bus_id)
 {
@@ -96,7 +98,7 @@ static void i2cStop(u8 bus_id, u8 arg0)
     *i2cGetCntReg(bus_id) = 0xC5;
 }
 
-
+//-----------------------------------------------------------------------------
 
 static bool i2cSelectDevice(u8 bus_id, u8 dev_reg)
 {
@@ -116,7 +118,7 @@ static bool i2cSelectRegister(u8 bus_id, u8 reg)
     return i2cGetResult(bus_id);
 }
 
-
+//-----------------------------------------------------------------------------
 
 u8 i2cReadRegister(u8 dev_id, u8 reg)
 {

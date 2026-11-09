@@ -24,7 +24,10 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Screen init code by dark_samus, bil1s, Normmatt, delebile and others
+*   LCD deinit code by tiniVi
+*/
 
 #include "types.h"
 #include "memory.h"
@@ -44,7 +47,7 @@ static void initScreens(u32 brightnessLevel, struct fb *fbs)
     *(vu32 *)0x10202244 = 0x1023E;
     *(vu32 *)0x10202A44 = 0x1023E;
 
-    
+    //Top screen
     *(vu32 *)0x10400400 = 0x000001c2;
     *(vu32 *)0x10400404 = 0x000000d1;
     *(vu32 *)0x10400408 = 0x000001c1;
@@ -77,11 +80,11 @@ static void initScreens(u32 brightnessLevel, struct fb *fbs)
     *(vu32 *)0x10400490 = 0x000002D0;
     *(vu32 *)0x1040049C = 0x00000000;
 
-    
+    //Disco register
     for(u32 i = 0; i < 256; i++)
         *(vu32 *)0x10400484 = 0x10101 * i;
 
-    
+    //Bottom screen
     *(vu32 *)0x10400500 = 0x000001c2;
     *(vu32 *)0x10400504 = 0x000000d1;
     *(vu32 *)0x10400508 = 0x000001c1;
@@ -112,7 +115,7 @@ static void initScreens(u32 brightnessLevel, struct fb *fbs)
     *(vu32 *)0x10400590 = 0x000002D0;
     *(vu32 *)0x1040059C = 0x00000000;
 
-    
+    //Disco register
     for(u32 i = 0; i < 256; i++)
         *(vu32 *)0x10400584 = 0x10101 * i;
 }
@@ -129,20 +132,20 @@ static void setupFramebuffers(struct fb *fbs)
 
 static void clearScreens(struct fb *fb)
 {
-    
+    //Setting up two simultaneous memory fills using the GPU
 
     vu32 *REGs_PSC0 = (vu32 *)0x10400010,
          *REGs_PSC1 = (vu32 *)0x10400020;
 
-    REGs_PSC0[0] = (u32)fb->top_left >> 3; 
-    REGs_PSC0[1] = (u32)(fb->top_left + SCREEN_TOP_FBSIZE) >> 3; 
-    REGs_PSC0[2] = 0; 
-    REGs_PSC0[3] = (2 << 8) | 1; 
+    REGs_PSC0[0] = (u32)fb->top_left >> 3; //Start address
+    REGs_PSC0[1] = (u32)(fb->top_left + SCREEN_TOP_FBSIZE) >> 3; //End address
+    REGs_PSC0[2] = 0; //Fill value
+    REGs_PSC0[3] = (2 << 8) | 1; //32-bit pattern; start
 
-    REGs_PSC1[0] = (u32)fb->bottom >> 3; 
-    REGs_PSC1[1] = (u32)(fb->bottom + SCREEN_BOTTOM_FBSIZE) >> 3; 
-    REGs_PSC1[2] = 0; 
-    REGs_PSC1[3] = (2 << 8) | 1; 
+    REGs_PSC1[0] = (u32)fb->bottom >> 3; //Start address
+    REGs_PSC1[1] = (u32)(fb->bottom + SCREEN_BOTTOM_FBSIZE) >> 3; //End address
+    REGs_PSC1[2] = 0; //Fill value
+    REGs_PSC1[3] = (2 << 8) | 1; //32-bit pattern; start
 
     while(!((REGs_PSC0[3] & 2) && (REGs_PSC1[3] & 2)));
 }
@@ -163,7 +166,7 @@ static void updateBrightness(u32 brightnessLevel)
 
 static void deinitScreens(void)
 {
-    
+    //Shutdown LCDs
     *(vu32 *)0x10202A44 = 0;
     *(vu32 *)0x10202244 = 0;
     *(vu32 *)0x10202014 = 0;

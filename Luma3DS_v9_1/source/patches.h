@@ -24,7 +24,14 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Signature patches by an unknown author
+*   Signature patches for old FIRMs by SciresM
+*   firmlaunches patching code originally by delebile
+*   FIRM partition writes patches by delebile
+*   Idea for svcBreak patches from yellows8 and others on #3dsdev
+*   TWL_FIRM patches by Steveice10 and others
+*/
 
 #pragma once
 

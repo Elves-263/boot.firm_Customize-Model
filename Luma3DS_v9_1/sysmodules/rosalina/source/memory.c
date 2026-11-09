@@ -70,19 +70,19 @@ void *memset32(void *dest, u32 value, u32 size)
     return dest;
 }
 
-
+//Boyer-Moore Horspool algorithm, adapted from http://www-igm.univ-mlv.fr/~lecroq/string/node18.html#SECTION00180
 u8 *memsearch(u8 *startPos, const void *pattern, u32 size, u32 patternSize)
 {
     const u8 *patternc = (const u8 *)pattern;
     u32 table[256];
 
-    
+    //Preprocessing
     for(u32 i = 0; i < 256; i++)
         table[i] = patternSize;
     for(u32 i = 0; i < patternSize - 1; i++)
         table[patternc[i]] = patternSize - i - 1;
 
-    
+    //Searching
     u32 j = 0;
     while(j <= size - patternSize)
     {
@@ -199,7 +199,7 @@ void hexItoa(u64 number, char *out, u32 digits, bool uppercase)
 }
 
 
-
+// Copied from newlib, without the reent stuff + some other stuff
 unsigned long int xstrtoul(const char *nptr, char **endptr, int base, bool allowPrefix, bool *ok)
 {
     register const unsigned char *s = (const unsigned char *)nptr;
@@ -210,7 +210,9 @@ unsigned long int xstrtoul(const char *nptr, char **endptr, int base, bool allow
 
     if(ok != NULL)
         *ok = true;
-     
+    /*
+     * See strtol for comments as to the logic used.
+     */
     do {
         c = *s++;
     } while ((c >= 9 && c <= 13) || c == ' ');
@@ -275,7 +277,7 @@ unsigned long int xstrtoul(const char *nptr, char **endptr, int base, bool allow
         acc = (unsigned long)-1;
         if(ok != NULL)
             *ok = false;
-
+//        rptr->_errno = ERANGE;
     } else if (neg)
         acc = -acc;
     if (endptr != 0)

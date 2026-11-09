@@ -29,7 +29,7 @@ const char *serviceNames[10] =
 
     "PxiPM",
 
-    "pxi:dev", 
+    "pxi:dev", //in the official PXI module maxSessions(pxi:dev) == 2. It doesn't matter anyways, since srvSysRegisterService is always called with 1
     "pxi:am9",
     "pxi:ps9",
 
@@ -48,14 +48,14 @@ static inline void initPXI(void)
 
     PXIReset();
 
-    if(PXISyncInterrupt != 0) svcBreak(USERBREAK_PANIC); 
+    if(PXISyncInterrupt != 0) svcBreak(USERBREAK_PANIC); //0xE0A0183B
     assertSuccess(svcCreateEvent(&PXISyncInterrupt, RESET_ONESHOT));
 
-    if(PXITransferMutex != 0) svcBreak(USERBREAK_PANIC); 
+    if(PXITransferMutex != 0) svcBreak(USERBREAK_PANIC); //0xE0A0183B
     assertSuccess(svcCreateMutex(&PXITransferMutex, false));
 
-    assertSuccess(svcCreateEvent(&handles[0], RESET_ONESHOT)); 
-    assertSuccess(svcCreateEvent(&handles[1], RESET_ONESHOT)); 
+    assertSuccess(svcCreateEvent(&handles[0], RESET_ONESHOT)); //receive FIFO not empty
+    assertSuccess(svcCreateEvent(&handles[1], RESET_ONESHOT)); //send FIFO empty
     assertSuccess(bindPXIInterrupts(&PXISyncInterrupt, &handles[0], &handles[1]));
 
     s32 handleIndex;
@@ -99,7 +99,7 @@ static u8 ALIGN(8) receiverStack[THREAD_STACK_SIZE];
 static u8 ALIGN(8) senderStack[THREAD_STACK_SIZE];
 static u8 ALIGN(8) PXISRV11HandlerStack[THREAD_STACK_SIZE];
 
-
+// this is called before main
 void __appInit()
 {
     assertSuccess(svcCreateEvent(&terminationRequestedEvent, RESET_STICKY));
@@ -118,7 +118,7 @@ void __appInit()
     }
 }
 
-
+// this is called after main exits
 void __appExit()
 {
     srvExit();
@@ -131,15 +131,16 @@ void __appExit()
     svcCloseHandle(sessionManager.PXISRV11ReplySentEvent);
 }
 
-
+// stubs for non-needed pre-main functions
 void __system_initSyscalls(){}
 
 
 Result __sync_init(void);
 Result __sync_fini(void);
 
-void __ctru_exit()
+void __wrap_exit(int rc)
 {
+  (void)rc;
   __appExit();
   __sync_fini();
   svcExitProcess();
@@ -154,7 +155,7 @@ void initSystem()
 
 int main(void)
 {
-    Handle handles[10] = {0}; 
+    Handle handles[10] = {0}; //notification handle + service handles
     MyThread receiverThread = {0}, senderThread = {0}, PXISRV11HandlerThread = {0};
 
     for(u32 i = 0; i < 9; i++)
@@ -196,7 +197,7 @@ int main(void)
 
     }
 
-    u32 PXIMC_OnPXITerminate = 0x10000; 
+    u32 PXIMC_OnPXITerminate = 0x10000; //TODO: see if this is correct
     sessionManager.sessionData[0].state = STATE_SENT_TO_ARM9;
     sendPXICmdbuf(NULL, 0, &PXIMC_OnPXITerminate);
 

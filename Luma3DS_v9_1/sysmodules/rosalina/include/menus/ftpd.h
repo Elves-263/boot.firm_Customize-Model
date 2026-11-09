@@ -1,6 +1,7 @@
 /*
 *   This file is part of Luma3DS
 *   Copyright (C) 2016-2021 Aurora Wright, TuxSH
+*   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -36,6 +37,7 @@ extern bool ftpdEnabled;
 
 MyThread *ftpdCreateThread(void);
 void ftpdThreadMain(void);
-Result Ftpd_Disable(s64 timeout);
+bool Ftpd_Disable(s64 timeout);
+void Ftpd_ReleaseMemory(void);
 
 void RosalinaMenu_Ftpd(void);

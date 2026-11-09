@@ -292,9 +292,9 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(ListAllHandles)
     char    outbuf[GDB_BUF_LEN / 2 + 1];
 
     if(ctx->commandData[0] == 0)
-        val = 0; 
+        val = 0; ///< All handles
     else
-    { 
+    { // Get handles of specified type
         val = xstrtoul(ctx->commandData, &end, 0, true, &ok);
 
         if(!ok)
@@ -420,7 +420,7 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(GetMemRegions)
 {
     u32         address = 0;
     u32         posInBuffer = 0;
-    u32         maxPosInBuffer = GDB_BUF_LEN / 2 - 35; 
+    u32         maxPosInBuffer = GDB_BUF_LEN / 2 - 35; ///< 35 is the maximum length of a formatted region
     Handle      handle;
     MemInfo     memi;
     PageInfo    pagei;
@@ -432,14 +432,14 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(GetMemRegions)
         goto end;
     }
 
-    while (address < 0x40000000 
+    while (address < 0x40000000 ///< Limit to check for regions
         && posInBuffer < maxPosInBuffer
         && R_SUCCEEDED(svcQueryProcessMemory(&memi, &pagei, handle, address)))
     {
-        
+        // Update the address for next region
         address = memi.base_addr + memi.size;
 
-        
+        // If region isn't FREE then add it to the list
         if (memi.state != MEMSTATE_FREE)
         {
             const char *perm = FormatMemPerm(memi.perm);

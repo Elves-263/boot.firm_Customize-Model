@@ -48,11 +48,11 @@ Result TranslateHandle(u32 *outKAddr, char *outClassName, Handle handle)
         obj = KProcessHandleTable__ToKAutoObject(handleTable, handle);
 
     if(obj == NULL)
-        return 0xD8E007F7; 
+        return 0xD8E007F7; // invalid handle
 
     name = classNameOfAutoObject(obj);
 
-    if(name == NULL) 
+    if(name == NULL) // shouldn't happen
         name = "KAutoObject";
 
     *outKAddr = (u32)obj;

@@ -55,7 +55,7 @@ Result UnmapProcessMemoryEx(Handle processHandle, void *dst, u32 size)
 
     if (res >= 0)
     {
-        
+        // Check for dst address to be in the right state (0x5806 as we set it with svcMapProcessMemoryEx)
         res = KProcessHwInfo__CheckVaState(hwInfo, (u32)dst, size, 0x5806, 0);
         if (res == 0)
             res = KProcessHwInfo__MapListOfKBlockInfo(hwInfo, (u32)dst, &list, 0, 0, 0);

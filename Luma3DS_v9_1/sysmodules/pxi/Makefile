@@ -43,7 +43,7 @@ endif
 
 CFLAGS := -Wall -Wextra $(WERROR) $(HARDERRORS) -MMD -MP -marm $(ARCH) -fno-builtin -std=c11 -O2 -g -ffast-math -mword-relocations \
 	  -ffunction-sections -fdata-sections $(INCLUDE) -DARM11 -D_3DS
-LDFLAGS := -specs=3dsx.specs -Wl,--gc-sections $(ARCH)
+LDFLAGS := -specs=3dsx.specs -Wl,--gc-sections,-wrap,exit $(ARCH)
 
 objects = $(patsubst $(dir_source)/%.c, $(dir_build)/%.o, \
           $(call rwildcard, $(dir_source), *.c))

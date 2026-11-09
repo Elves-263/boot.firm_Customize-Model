@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Code originally by reworks
+*/
 
 #pragma once
 

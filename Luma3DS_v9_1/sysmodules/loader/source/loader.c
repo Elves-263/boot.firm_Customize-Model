@@ -52,25 +52,25 @@ static inline void loadCFWInfo(void)
     isSdMode = (bool)out;
 
     IFile file;
-    if(needToInitSd) fileOpen(&file, ARCHIVE_SDMC, "/", FS_OPEN_READ); 
+    if(needToInitSd) fileOpen(&file, ARCHIVE_SDMC, "/", FS_OPEN_READ); //Init SD card if SAFE_MODE is being booted
 }
 
 static int lzss_decompress(u8 *end)
 {
-  unsigned int v1; 
-  u8 *v2; 
-  u8 *v3; 
-  u8 *v4; 
-  char v5; 
-  char v6; 
-  signed int v7; 
-  int v9; 
-  u8 *v11; 
-  int v12; 
-  int v13; 
-  int v14; 
-  unsigned int v15; 
-  int v16; 
+  unsigned int v1; // r1@2
+  u8 *v2; // r2@2
+  u8 *v3; // r3@2
+  u8 *v4; // r1@2
+  char v5; // r5@4
+  char v6; // t1@4
+  signed int v7; // r6@4
+  int v9; // t1@7
+  u8 *v11; // r3@8
+  int v12; // r12@8
+  int v13; // t1@8
+  int v14; // t1@8
+  unsigned int v15; // r7@8
+  int v16; // r12@8
   int ret;
 
   ret = 0;
@@ -155,29 +155,29 @@ static Result load_code(u64 progid, prog_addrs_t *shared, u64 prog_handle, int i
         svcBreak(USERBREAK_ASSERT);
     }
 
-    
+    // get file size
     if (R_FAILED(IFile_GetSize(&file, &size)))
     {
         IFile_Close(&file);
         svcBreak(USERBREAK_ASSERT);
     }
 
-    
+    // check size
     if (size > (u64)shared->total_size << 12)
     {
         IFile_Close(&file);
         return 0xC900464F;
     }
 
-    
+    // read code
     res = IFile_Read(&file, &total, (void *)shared->text_addr, size);
-    IFile_Close(&file); 
+    IFile_Close(&file); // done reading
     if (R_FAILED(res))
     {
         svcBreak(USERBREAK_ASSERT);
     }
 
-    
+    // decompress
     if (is_compressed)
     {
       lzss_decompress((u8 *)shared->text_addr + size);
@@ -186,7 +186,7 @@ static Result load_code(u64 progid, prog_addrs_t *shared, u64 prog_handle, int i
 
   u16 progver = g_exheader.codesetinfo.flags.remasterversion[0] | (g_exheader.codesetinfo.flags.remasterversion[1] << 8);
 
-  
+  // patch
   patchCode(progid, progver, (u8 *)shared->text_addr, shared->total_size << 12, g_exheader.codesetinfo.text.codesize, g_exheader.codesetinfo.ro.codesize, g_exheader.codesetinfo.data.codesize, g_exheader.codesetinfo.ro.address, g_exheader.codesetinfo.data.address);
 
   return 0;
@@ -233,8 +233,8 @@ static Result loader_GetProgramInfo(exheader_header *exheader, u64 prog_handle)
   else
   {
     res = FSREG_CheckHostLoadId(prog_handle);
-    
-    
+    //if ((res >= 0 && (unsigned)res >> 27) || (res < 0 && ((unsigned)res >> 27)-32))
+    //so use PXIPM if FSREG fails OR returns "info", is the second condition a bug?
     if (R_FAILED(res) || (R_SUCCEEDED(res) && R_LEVEL(res) != RL_SUCCESS))
     {
       res = PXIPM_GetProgramInfo(exheader, prog_handle);
@@ -254,7 +254,7 @@ static Result loader_GetProgramInfo(exheader_header *exheader, u64 prog_handle)
     exheader->arm11systemlocalcaps.storageinfo.accessinfo[0] |= 0x480;
     exheader->accessdesc.arm11systemlocalcaps.storageinfo.accessinfo[0] |= 0x480;
 
-    
+    // Tweak 3dsx placeholder title exheader
     if (nbSection0Modules == 6)
     {
       if(exheader->arm11systemlocalcaps.programid == HBLDR_3DSX_TID)
@@ -301,7 +301,7 @@ static Result loader_LoadProcess(Handle *process, u64 prog_handle)
   u32 data_mem_size;
   u64 progid;
 
-  
+  // make sure the cached info corrosponds to the current prog_handle
   if (g_cached_prog_handle != prog_handle || g_exheader.arm11systemlocalcaps.programid == HBLDR_3DSX_TID)
   {
     res = loader_GetProgramInfo(&g_exheader, prog_handle);
@@ -313,7 +313,7 @@ static Result loader_LoadProcess(Handle *process, u64 prog_handle)
     }
   }
 
-  
+  // get kernel flags
   flags = 0;
   for (count = 0; count < 28; count++)
   {
@@ -328,7 +328,7 @@ static Result loader_LoadProcess(Handle *process, u64 prog_handle)
     return MAKERESULT(RL_PERMANENT, RS_INVALIDARG, 1, 2);
   }
 
-  
+  // check for 3dsx process
   progid = g_exheader.arm11systemlocalcaps.programid;
   if (progid == HBLDR_3DSX_TID)
   {
@@ -363,7 +363,7 @@ static Result loader_LoadProcess(Handle *process, u64 prog_handle)
     return res;
   }
 
-  
+  // allocate process memory
   vaddr.text_addr = g_exheader.codesetinfo.text.address;
   vaddr.text_size = (g_exheader.codesetinfo.text.codesize + 4095) >> 12;
   vaddr.ro_addr = g_exheader.codesetinfo.ro.address;
@@ -377,7 +377,7 @@ static Result loader_LoadProcess(Handle *process, u64 prog_handle)
     return res;
   }
 
-  
+  // load code
   if ((res = load_code(progid, &shared_addr, prog_handle, g_exheader.codesetinfo.flags.flag & 1)) >= 0)
   {
     u32   *code = (u32 *)shared_addr.text_addr;
@@ -401,13 +401,13 @@ static Result loader_LoadProcess(Handle *process, u64 prog_handle)
       svcCloseHandle(codeset);
       if (res >= 0)
       {
-        
+        // Try to load a plugin for the game
         if (!isHomebrew && ((u32)((progid >> 0x20) & 0xFFFFFFEDULL) == 0x00040000))
         {
-            
+            // Special case handling: games rebooting the 3DS on old models
             if (!isN3DS && (g_exheader.arm11systemlocalcaps.flags[2] >> 4) > 0)
             {
-                
+                // Check if the plugin loader is enabled, otherwise skip the loading part
                 s64 out;
 
                 svcGetSystemInfo(&out, 0x10000, 0x102);
@@ -446,7 +446,7 @@ static Result loader_RegisterProgram(u64 *prog_handle, FS_ProgramInfo *title, FS
   if (prog_id >> 32 != 0xFFFF0000)
   {
     res = FSREG_CheckHostLoadId(prog_id);
-    
+    //if ((res >= 0 && (unsigned)res >> 27) || (res < 0 && ((unsigned)res >> 27)-32))
     if (R_FAILED(res) || (R_SUCCEEDED(res) && R_LEVEL(res) != RL_SUCCESS))
     {
       res = PXIPM_RegisterProgram(prog_handle, title, update);
@@ -457,7 +457,7 @@ static Result loader_RegisterProgram(u64 *prog_handle, FS_ProgramInfo *title, FS
       if (*prog_handle >> 32 != 0xFFFF0000)
       {
         res = FSREG_CheckHostLoadId(*prog_handle);
-        
+        //if ((res >= 0 && (unsigned)res >> 27) || (res < 0 && ((unsigned)res >> 27)-32))
         if (R_FAILED(res) || (R_SUCCEEDED(res) && R_LEVEL(res) != RL_SUCCESS))
         {
           return 0;
@@ -479,7 +479,7 @@ static Result loader_RegisterProgram(u64 *prog_handle, FS_ProgramInfo *title, FS
       return 0;
     }
     res = FSREG_CheckHostLoadId(*prog_handle);
-    
+    //if ((res >= 0 && (unsigned)res >> 27) || (res < 0 && ((unsigned)res >> 27)-32))
     if (R_FAILED(res) || (R_SUCCEEDED(res) && R_LEVEL(res) != RL_SUCCESS))
     {
       svcBreak(USERBREAK_ASSERT);
@@ -499,7 +499,7 @@ static Result loader_UnregisterProgram(u64 prog_handle)
   else
   {
     res = FSREG_CheckHostLoadId(prog_handle);
-    
+    //if ((res >= 0 && (unsigned)res >> 27) || (res < 0 && ((unsigned)res >> 27)-32))
     if (R_FAILED(res) || (R_SUCCEEDED(res) && R_LEVEL(res) != RL_SUCCESS))
     {
       return PXIPM_UnregisterProgram(prog_handle);
@@ -526,7 +526,7 @@ static void handle_commands(void)
   res = 0;
   switch (cmdid)
   {
-    case 1: 
+    case 1: // LoadProcess
     {
       res = loader_LoadProcess(&handle, *(u64 *)&cmdbuf[1]);
       cmdbuf[0] = 0x10042;
@@ -535,7 +535,7 @@ static void handle_commands(void)
       cmdbuf[3] = handle;
       break;
     }
-    case 2: 
+    case 2: // RegisterProgram
     {
       memcpy(&title, &cmdbuf[1], sizeof(FS_ProgramInfo));
       memcpy(&update, &cmdbuf[5], sizeof(FS_ProgramInfo));
@@ -545,7 +545,7 @@ static void handle_commands(void)
       *(u64 *)&cmdbuf[2] = prog_handle;
       break;
     }
-    case 3: 
+    case 3: // UnregisterProgram
     {
       prog_handle = *(u64 *)&cmdbuf[1];
 
@@ -557,7 +557,7 @@ static void handle_commands(void)
       cmdbuf[1] = loader_UnregisterProgram(prog_handle);
       break;
     }
-    case 4: 
+    case 4: // GetProgramInfo
     {
       prog_handle = *(u64 *)&cmdbuf[1];
       if (prog_handle != g_cached_prog_handle || g_exheader.arm11systemlocalcaps.programid == HBLDR_3DSX_TID)
@@ -579,7 +579,7 @@ static void handle_commands(void)
       cmdbuf[3] = (u32) &g_ret_buf;
       break;
     }
-    default: 
+    default: // error
     {
       cmdbuf[0] = 0x40;
       cmdbuf[1] = 0xD900182F;
@@ -598,14 +598,14 @@ static Result should_terminate(int *term_request)
   {
     return ret;
   }
-  if (notid == 0x100) 
+  if (notid == 0x100) // term request
   {
     *term_request = 1;
   }
   return 0;
 }
 
-
+// this is called before main
 void __appInit()
 {
   srvSysInit();
@@ -614,7 +614,7 @@ void __appInit()
   pxipmInit();
 }
 
-
+// this is called after main exits
 void __appExit()
 {
   pxipmExit();
@@ -623,7 +623,7 @@ void __appExit()
   srvSysExit();
 }
 
-
+// stubs for non-needed pre-main functions
 void __sync_init();
 void __sync_fini();
 void __system_initSyscalls();
@@ -688,7 +688,7 @@ int main()
 
     if (R_FAILED(ret))
     {
-      
+      // check if any handle has been closed
       if (ret == (int)0xC920181A)
       {
         if (index == -1)
@@ -714,11 +714,11 @@ int main()
     }
     else
     {
-      
+      // process responses
       reply_target = 0;
       switch (index)
       {
-        case 0: 
+        case 0: // notification
         {
           if (R_FAILED(should_terminate(&term_request)))
           {
@@ -726,7 +726,7 @@ int main()
           }
           break;
         }
-        case 1: 
+        case 1: // new session
         {
           if (R_FAILED(svcAcceptSession(&handle, *srv_handle)))
           {
@@ -743,7 +743,7 @@ int main()
           }
           break;
         }
-        default: 
+        default: // session
         {
           handle_commands();
           reply_target = g_handles[index];

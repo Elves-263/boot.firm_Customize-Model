@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Thanks to whoever contributed in the development of this file
+*/
 
 #pragma once
 

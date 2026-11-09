@@ -158,7 +158,7 @@ static int ERRF_FormatError(char *out, ERRF_FatalErrInfo *info)
             desc = "The System Memory has been damaged.";
             break;
         case ERRF_ERRTYPE_FAILURE:
-            info->data.failure_mesg[0x60] = 0; 
+            info->data.failure_mesg[0x60] = 0; // make sure the last byte in the IPC buffer is NULL
             desc = info->data.failure_mesg;
             break;
         default:
@@ -235,12 +235,12 @@ static void ERRF_HandleCommands(void)
 
     switch(cmdbuf[0] >> 16)
     {
-        case 1: 
+        case 1: // Throw
         {
             ERRF_FatalErrInfo *info = (ERRF_FatalErrInfo *)(cmdbuf + 1);
             if(info->type != ERRF_ERRTYPE_LOG_ONLY || info->procId == 0 || R_FAILED(ERRF_SaveErrorToFile(info)))
             {
-                menuEnter();
+                menuEnterForFatalError();
 
                 Draw_Lock();
                 Draw_ClearFramebuffer();
@@ -248,7 +248,13 @@ static void ERRF_HandleCommands(void)
 
                 ERRF_DisplayError(info);
 
-                 
+                /*
+                If we ever wanted to return:
+                Draw_Unlock();
+                menuLeave();
+
+                but we don't
+                */
                 waitInput();
                 svcKernelSetState(7);
                 __builtin_unreachable();
@@ -259,7 +265,7 @@ static void ERRF_HandleCommands(void)
             break;
         }
 
-        case 2: 
+        case 2: // SetUserString
         {
             if(cmdbuf[0] != 0x20042 || (cmdbuf[2] & 0x3C0F) != 2)
             {
@@ -296,13 +302,13 @@ void errDispThreadMain(void)
         handles[0] = serverHandle;
         handles[1] = sessionHandle;
 
-        if(replyTarget == 0) 
+        if(replyTarget == 0) // k11
             cmdbuf[0] = 0xFFFF0000;
         res = svcReplyAndReceive(&index, handles, sessionHandle == 0 ? 1 : 2, replyTarget);
 
         if(R_FAILED(res))
         {
-            if((u32)res == 0xC920181A) 
+            if((u32)res == 0xC920181A) // session closed by remote
             {
                 svcCloseHandle(sessionHandle);
                 sessionHandle = 0;

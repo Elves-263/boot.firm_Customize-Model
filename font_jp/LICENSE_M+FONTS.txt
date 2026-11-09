@@ -1,0 +1,22 @@
+font_jp.bin（Rosalina の日本語の字）は、M+ BITMAP FONTS の 10 ドットの BDF
+（https://github.com/itouhiro/PixelMplus の src/bdf.d）から mkfont_jp.py で
+作ったものです。M+ BITMAP FONTS のライセンス（M+ FONT LICENSE）は次のとおりです。
+
+--------------------------------------------------------------------------------
+M+ FONTS                                Copyright (C) 2002-2013 M+ FONTS PROJECT
+
+LICENSE_E
+
+These fonts are free software.
+Unlimited permission is granted to use, copy, and distribute them, with
+or without modification, either commercially or noncommercially.
+THESE FONTS ARE PROVIDED "AS IS" WITHOUT WARRANTY.
+
+LICENSE_J
+
+これらのフォントはフリー（自由な）ソフトウエアです。
+あらゆる改変の有無に関わらず、また商業的な利用であっても、自由にご利用、
+複製、再配布することができますが、全て無保証とさせていただきます。
+
+http://mplus-fonts.sourceforge.jp/
+--------------------------------------------------------------------------------

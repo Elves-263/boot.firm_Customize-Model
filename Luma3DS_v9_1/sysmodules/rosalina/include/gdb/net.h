@@ -41,7 +41,7 @@ int GDB_SendPacket(GDBContext *ctx, const char *packetData, u32 len);
 int GDB_SendFormattedPacket(GDBContext *ctx, const char *packetDataFmt, ...);
 int GDB_SendHexPacket(GDBContext *ctx, const void *packetData, u32 len);
 int GDB_SendStreamData(GDBContext *ctx, const char *streamData, u32 offset, u32 length, u32 totalSize, bool forceEmptyLast);
-int GDB_SendDebugString(GDBContext *ctx, const char *fmt, ...); 
+int GDB_SendDebugString(GDBContext *ctx, const char *fmt, ...); // unsecure
 int GDB_ReplyEmpty(GDBContext *ctx);
 int GDB_ReplyOk(GDBContext *ctx);
 int GDB_ReplyErrno(GDBContext *ctx, int no);

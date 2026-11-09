@@ -38,6 +38,7 @@
 #include "memory.h"
 #include "screen.h"
 #include "fatfs/sdmmc/sdmmc.h"
+#include "lang.h"
 
 extern CfgData configData;
 extern ConfigurationStatus needConfig;
@@ -59,19 +60,19 @@ void main(int argc, char **argv, u32 magicWord)
     const vu8 *bootMediaStatus = (const vu8 *)0x1FFFE00C;
     const vu32 *bootPartitionsStatus = (const vu32 *)0x1FFFE010;
 
-    
+    //Shell closed, no error booting NTRCARD, NAND paritions not even considered
     isNtrBoot = bootMediaStatus[3] == 2 && !bootMediaStatus[1] && !bootPartitionsStatus[0] && !bootPartitionsStatus[1];
 
-    if((magicWord & 0xFFFF) == 0xBEEF && argc >= 1) 
+    if((magicWord & 0xFFFF) == 0xBEEF && argc >= 1) //Normal (B9S) boot
     {
         bootType = isNtrBoot ? B9SNTR : B9S;
 
         u32 i;
-        for(i = 0; i < sizeof(launchedPath)/2 - 1 && argv[0][i] != 0; i++) 
+        for(i = 0; i < sizeof(launchedPath)/2 - 1 && argv[0][i] != 0; i++) //Copy and convert the path to UTF-16
             launchedPath[i] = argv[0][i];
         launchedPath[i] = 0;
     }
-    else if(magicWord == 0xBABE && argc == 2) 
+    else if(magicWord == 0xBABE && argc == 2) //Firmlaunch
     {
         bootType = FIRMLAUNCH;
 
@@ -81,7 +82,7 @@ void main(int argc, char **argv, u32 magicWord)
             launchedPath[i] = p[i];
         launchedPath[i] = 0;
     }
-    else if(magicWord == 0xB002) 
+    else if(magicWord == 0xB002) //FIRM/NTRCARD boot
     {
         if(isNtrBoot) bootType = NTR;
         else
@@ -98,7 +99,7 @@ void main(int argc, char **argv, u32 magicWord)
                 path = "firm1:";
             }
 
-            for(u32 i = 0; i < 7; i++) 
+            for(u32 i = 0; i < 7; i++) //Copy and convert the path to UTF-16
                 launchedPath[i] = path[i];
         }
 
@@ -141,10 +142,13 @@ void main(int argc, char **argv, u32 magicWord)
         error("Launched from an unsupported location: %s.", mountPoint);
     }
 
-    
+    //Attempt to read the configuration file
+    // 設定画面・PIN の画面の言語（/luma/lang.cfg）
+    initLanguage();
+
     needConfig = readConfig() ? MODIFY_CONFIGURATION : CREATE_CONFIGURATION;
 
-    
+    //Determine if this is a firmlaunch boot
     if(bootType == FIRMLAUNCH)
     {
         if(needConfig == CREATE_CONFIGURATION) mcuPowerOff();
@@ -175,7 +179,7 @@ void main(int argc, char **argv, u32 magicWord)
     firmType = NATIVE_FIRM;
     isFirmProtEnabled = bootType != NTR;
 
-    
+    //Get pressed buttons
     u32 pressed = HID_PAD;
 
     
@@ -190,28 +194,30 @@ void main(int argc, char **argv, u32 magicWord)
     }
 
     
+    //If it's a MCU reboot, try to force boot options
     if(CFG_BOOTENV && needConfig != CREATE_CONFIGURATION)
     {
-        
+        //Always force a SysNAND boot when quitting AGB_FIRM
         if(CFG_BOOTENV == 7)
         {
             nandType = FIRMWARE_SYSNAND;
             firmSource = (BOOTCFG_NAND != 0) == (BOOTCFG_FIRM != 0) ? FIRMWARE_SYSNAND : (FirmwareSource)BOOTCFG_FIRM;
 
-            
+            //Prevent multiple boot options-forcing
             if(nandType != BOOTCFG_NAND || firmSource != BOOTCFG_FIRM) isNoForceFlagSet = true;
 
             goto boot;
         }
 
-        
+        //Account for DSiWare soft resets if exiting TWL_FIRM
         if(CFG_BOOTENV == 3)
         {
             static const u8 TLNC[] = {0x54, 0x4C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4E, 0x43};
             if(memcmp((void *)0x20000C00, TLNC, 10) == 0) needToInitSd = true;
         }
 
-         
+        /* Force the last used boot options if autobooting a TWL title, or unless a button is pressed
+           or the no-forcing flag is set */
         if(needToInitSd || memcmp((void *)0x20000300, "TLNC", 4) == 0 || (!pressed && !BOOTCFG_NOFORCEFLAG))
         {
             nandType = (FirmwareSource)BOOTCFG_NAND;
@@ -224,14 +230,14 @@ void main(int argc, char **argv, u32 magicWord)
     u32 pinMode = MULTICONFIG(PIN);
     bool pinExists = pinMode != 0 && verifyPin(pinMode);
 
-    
+    //If no configuration file exists or SELECT is held or if booted from NTRCARD, load configuration menu
     bool shouldLoadConfigMenu = needConfig == CREATE_CONFIGURATION || ((pressed & (BUTTON_SELECT | BUTTON_L1)) == BUTTON_SELECT);
 
     if(shouldLoadConfigMenu)
     {
         configMenu(pinExists, pinMode);
 
-        
+        //Update pressed buttons
         pressed = HID_PAD;
     }
 
@@ -243,7 +249,7 @@ void main(int argc, char **argv, u32 magicWord)
         isSafeMode = true;
         needToInitSd = true;
 
-        
+        //If the PIN has been verified, wait to make it easier to press the SAFE_MODE combo
         if(pinExists && !shouldLoadConfigMenu)
         {
             while(HID_PAD & PIN_BUTTONS);
@@ -269,10 +275,10 @@ void main(int argc, char **argv, u32 magicWord)
 
     if(splashMode == 2) loadSplash();
 
-    
+    //If booting from CTRNAND, always use SysNAND
     if(!isSdMode) nandType = FIRMWARE_SYSNAND;
 
-    
+    //If R is pressed, boot the non-updated NAND with the FIRM of the opposite one
     else if(pressed & BUTTON_R1)
     {
         if(CONFIG(USEEMUFIRM))
@@ -287,10 +293,11 @@ void main(int argc, char **argv, u32 magicWord)
         }
     }
 
-     
+    /* Else, boot the NAND the user set to autoboot or the opposite one, depending on L,
+       with their own FIRM */
     else firmSource = nandType = (autoBootEmu == ((pressed & BUTTON_L1) == BUTTON_L1)) ? FIRMWARE_SYSNAND : FIRMWARE_EMUNAND;
 
-    
+    //If we're booting EmuNAND or using EmuNAND FIRM, determine which one from the directional pad buttons, or otherwise from the config
     if(nandType == FIRMWARE_EMUNAND || firmSource == FIRMWARE_EMUNAND)
     {
         FirmwareSource tempNand;
@@ -319,16 +326,16 @@ void main(int argc, char **argv, u32 magicWord)
 
 boot:
 
-    
+    //If we need to boot EmuNAND, make sure it exists
     if(nandType != FIRMWARE_SYSNAND)
     {
         locateEmuNand(&nandType);
         if(nandType == FIRMWARE_SYSNAND) firmSource = FIRMWARE_SYSNAND;
-        else if((*(vu16 *)(SDMMC_BASE + REG_SDSTATUS0) & TMIO_STAT0_WRPROTECT) == 0) 
+        else if((*(vu16 *)(SDMMC_BASE + REG_SDSTATUS0) & TMIO_STAT0_WRPROTECT) == 0) //Make sure the SD card isn't write protected
             error("The SD card is locked, EmuNAND can not be used.\nPlease turn the write protection switch off.");
     }
 
-    
+    //Same if we're using EmuNAND as the FIRM source
     else if(firmSource != FIRMWARE_SYSNAND)
         locateEmuNand(&firmSource);
 

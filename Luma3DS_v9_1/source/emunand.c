@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Code for locating the SDMMC struct by Normmatt
+*/
 
 
 #include "emunand.h"
@@ -46,7 +48,7 @@ void locateEmuNand(FirmwareSource *nandType)
     {
         nandSize = getMMCDevice(0)->total_size;
         sdmmc_sdcard_readsectors(0, 1, temp);
-        fatStart = *(u32 *)(temp + 0x1C6); 
+        fatStart = *(u32 *)(temp + 0x1C6); //First sector of the FAT partition
     }
 
     for(u32 i = 0; i < 3; i++)
@@ -57,13 +59,13 @@ void locateEmuNand(FirmwareSource *nandType)
         switch(i)
         {
             case 1:
-                nandOffset = ROUND_TO_4MB(nandSize + 1); 
+                nandOffset = ROUND_TO_4MB(nandSize + 1); //"Default" layout
                 break;
             case 2:
-                nandOffset = roundedMinsizes[ISN3DS ? 1 : 0]; 
+                nandOffset = roundedMinsizes[ISN3DS ? 1 : 0]; //"Minsize" layout
                 break;
             case 0:
-                nandOffset = *nandType == FIRMWARE_EMUNAND ? 0 : (nandSize > 0x200000 ? 0x400000 : 0x200000); 
+                nandOffset = *nandType == FIRMWARE_EMUNAND ? 0 : (nandSize > 0x200000 ? 0x400000 : 0x200000); //"Legacy" layout
                 break;
         }
 
@@ -71,7 +73,7 @@ void locateEmuNand(FirmwareSource *nandType)
 
         if(fatStart >= nandOffset + roundedMinsizes[ISN3DS ? 1 : 0])
         {
-            
+            //Check for RedNAND
             if(!sdmmc_sdcard_readsectors(nandOffset + 1, 1, temp) && memcmp(temp + 0x100, "NCSD", 4) == 0)
             {
                 emuOffset = nandOffset + 1;
@@ -79,7 +81,7 @@ void locateEmuNand(FirmwareSource *nandType)
                 return;
             }
 
-            
+            //Check for Gateway EmuNAND
             else if(i != 2 && !sdmmc_sdcard_readsectors(nandOffset + nandSize, 1, temp) && memcmp(temp + 0x100, "NCSD", 4) == 0)
             {
                 emuOffset = nandOffset;
@@ -91,7 +93,7 @@ void locateEmuNand(FirmwareSource *nandType)
         if(*nandType == FIRMWARE_EMUNAND) break;
     }
 
-    
+    //Fallback to the first EmuNAND if there's no second/third/fourth one, or to SysNAND if there isn't any
     if(*nandType != FIRMWARE_EMUNAND)
     {
         *nandType = FIRMWARE_EMUNAND;
@@ -104,7 +106,7 @@ static inline bool getFreeK9Space(u8 *pos, u32 size, u8 **freeK9Space)
 {
     static const u8 pattern[] = {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00};
 
-    
+    //Looking for the last free space before Process9
     *freeK9Space = memsearch(pos, pattern, size, sizeof(pattern));
 
     if(*freeK9Space == NULL || (u32)(pos + size - *freeK9Space) < 0x455 + emunand_bin_size ||
@@ -135,7 +137,7 @@ static inline u32 getOldSdmmc(u32 *sdmmc, u32 firmVersion)
 
 static inline u32 getSdmmc(u8 *pos, u32 size, u32 *sdmmc)
 {
-    
+    //Look for struct code
     static const u8 pattern[] = {0x21, 0x20, 0x18, 0x20};
 
     const u8 *off = memsearch(pos, pattern, size, sizeof(pattern));
@@ -149,7 +151,7 @@ static inline u32 getSdmmc(u8 *pos, u32 size, u32 *sdmmc)
 
 static inline u32 patchNandRw(u8 *pos, u32 size, u32 branchOffset)
 {
-    
+    //Look for read/write code
     static const u8 pattern[] = {0x1E, 0x00, 0xC8, 0x05};
 
     u16 *readOffset = (u16 *)memsearch(pos, pattern, size, sizeof(pattern));
@@ -172,7 +174,7 @@ static inline u32 patchNandRw(u8 *pos, u32 size, u32 branchOffset)
 
 static inline u32 patchMpu(u8 *pos, u32 size)
 {
-    
+    //Look for MPU pattern
     static const u8 pattern[] = {0x03, 0x00, 0x24, 0x00};
 
     u16 *off = (u16 *)memsearch(pos, pattern, size, sizeof(pattern));
@@ -193,26 +195,26 @@ u32 patchEmuNand(u8 *arm9Section, u32 kernel9Size, u8 *process9Offset, u32 proce
 
     u32 ret = 0;
 
-    
+    //Copy EmuNAND code
     memcpy(freeK9Space, emunand_bin, emunand_bin_size);
 
-    
+    //Add the data of the found EmuNAND
     u32 *posOffset = (u32 *)memsearch(freeK9Space, "NAND", emunand_bin_size, 4),
         *posHeader = (u32 *)memsearch(freeK9Space, "NCSD", emunand_bin_size, 4);
     *posOffset = emuOffset;
     *posHeader = emuHeader;
 
-    
+    //Find and add the SDMMC struct
     u32 *posSdmmc = (u32 *)memsearch(freeK9Space, "SDMC", emunand_bin_size, 4);
     u32 sdmmc;
     ret += !ISN3DS && firmVersion < 0x25 ? getOldSdmmc(&sdmmc, firmVersion) : getSdmmc(process9Offset, process9Size, &sdmmc);
     if(!ret) *posSdmmc = sdmmc;
 
-    
+    //Add EmuNAND hooks
     u32 branchOffset = (u32)(freeK9Space - arm9Section + kernel9Address);
     ret += patchNandRw(process9Offset, process9Size, branchOffset);
 
-    
+    //Set MPU
     ret += patchMpu(arm9Section, kernel9Size);
 
     return ret;

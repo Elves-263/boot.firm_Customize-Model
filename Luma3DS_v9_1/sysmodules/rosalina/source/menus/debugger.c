@@ -33,13 +33,14 @@
 #include "gdb/debug.h"
 #include "gdb/monitor.h"
 #include "gdb/net.h"
+#include "menus/lang.h"
 
 Menu debuggerMenu = {
-    "Debugger options menu",
+    TR("デバッガーの設定", "Debugger options menu"),
     .nbItems = 2,
     {
-        { "Enable debugger",  METHOD, .method = &DebuggerMenu_EnableDebugger  },
-        { "Disable debugger", METHOD, .method = &DebuggerMenu_DisableDebugger }
+        { TR("デバッガーを有効にする", "Enable debugger"), METHOD, .method = &DebuggerMenu_EnableDebugger  },
+        { TR("デバッガーを無効にする", "Disable debugger"), METHOD, .method = &DebuggerMenu_DisableDebugger }
     }
 };
 
@@ -82,15 +83,15 @@ void DebuggerMenu_EnableDebugger(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Debugger options menu");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("デバッガーの設定", "Debugger options menu"));
 
         if(alreadyEnabled)
-            Draw_DrawString(10, 30, COLOR_WHITE, "Already enabled!");
+            Draw_DrawString(10, 30, COLOR_WHITE, TR("すでに有効です。", "Already enabled!"));
         else if(!isSocURegistered)
             Draw_DrawString(10, 30, COLOR_WHITE, "Can't start the debugger before the system has fi-\nnished loading.");
         else
         {
-            Draw_DrawString(10, 30, COLOR_WHITE, "Starting debugger...");
+            Draw_DrawString(10, 30, COLOR_WHITE, TR("デバッガーを起動しています...", "Starting debugger..."));
 
             if(!done)
             {
@@ -108,7 +109,7 @@ void DebuggerMenu_EnableDebugger(void)
                 done = true;
             }
             if(res == 0)
-                Draw_DrawString(10, 30, COLOR_WHITE, "Starting debugger... OK.");
+                Draw_DrawString(10, 30, COLOR_WHITE, TR("デバッガーを起動しています... 完了", "Starting debugger... OK."));
             else
                 Draw_DrawString(10, 30, COLOR_WHITE, buf);
         }
@@ -140,8 +141,8 @@ void DebuggerMenu_DisableDebugger(void)
     do
     {
         Draw_Lock();
-        Draw_DrawString(10, 10, COLOR_TITLE, "Debugger options menu");
-        Draw_DrawString(10, 30, COLOR_WHITE, initialized ? (res == 0 ? "Debugger disabled successfully." : buf) : "Debugger not enabled.");
+        Draw_DrawString(10, 10, COLOR_TITLE, TR("デバッガーの設定", "Debugger options menu"));
+        Draw_DrawString(10, 30, COLOR_WHITE, initialized ? (res == 0 ? TR("デバッガーを無効にしました。", "Debugger disabled successfully.") : buf) : TR("デバッガーは有効になっていません。", "Debugger not enabled."));
         Draw_FlushFramebuffer();
         Draw_Unlock();
     }

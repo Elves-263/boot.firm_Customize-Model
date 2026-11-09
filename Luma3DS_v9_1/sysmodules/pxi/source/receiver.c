@@ -14,7 +14,7 @@ static inline void receiveFromArm9(void)
 {
     u32 serviceId = PXIReceiveWord();
 
-    
+    //The offcical implementation can return 0xD90043FA
     if(((serviceId >= 10)) || (sessionManager.sessionData[serviceId].state != STATE_SENT_TO_ARM9))
         svcBreak(USERBREAK_PANIC);
 

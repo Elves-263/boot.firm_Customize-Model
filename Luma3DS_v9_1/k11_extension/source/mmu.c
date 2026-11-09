@@ -124,7 +124,7 @@ u32     L1MMUTable__GetPAFromVA(u32 *table, u32 va)
             break;
         }
         default:
-            
+            // VA not found
             break;
     }
 
@@ -194,7 +194,7 @@ u32     L1MMUTable__GetAddressUserPerm(u32 *table, u32 va)
             break;
         }
         default:
-            
+            // VA not found
             break;
     }
 

@@ -109,17 +109,120 @@
   （`-Wformat-overflow` の警告対策）。
 - `IsPluginLoadable()` のパスバッファを `g_path` と名前の合計に合わせた。
 
+### 2026-08 ～ 2026-10（配布版 v1.0 ～ v1.4）— ELVES
+配布版ごとの変更の詳細は、配布物の README.txt の「更新履歴」を参照。主な改変は次のとおり。
+- v1.0: 3gx セレクター、破壊的 3gx チェッカー、3gx / txt チェッカー、配色の設定（Colors）、
+  セルフテスト、SD 空き容量の警告、エラーログ（/luma/log.txt）、ファイルブラウザ（閲覧のみ）、
+  セーフモード（L + R + A）を追加。
+- v1.0_fix: メニューのスクロール表示、3gx の拡張子判定の修正、破壊的 3gx の承認の記録を廃止。
+- v1.1: バッテリー情報、メモリダンプ、ファイル操作、FTP サーバー、表示言語の切り替えを追加
+  （`sysmodules/rosalina/source/menus/` 以下の battery.c、ftpd.c、lang.c、memdump.c、text_input.c）。
+  バージョン切り替えで SD:/boot.firm を差し替えるようにし、切り替え時に画面を毎回初期化。
+  破壊的 3gx の判定をパスの形と重み付けに変更。
+- v1.2: v9.1 の追加モジュールの大きさの書き込みを修正（Old 3DS で起動しない件）、
+  ファイルのコピーで使う作業用メモリ（スタック）を削減。
+- v1.3: Check SD Card を追加（sha256.c）。boot.firm を一時ファイルで確かめてから差し替える。
+  破壊的 3gx の検査をプログラム部分に限定し、承認を /luma/plugins/.approved3gx に記録。
+  v9.1 の、ファイルの末尾で読み込みを繰り返す不具合を修正（ifile.c）。
+- v1.4: FTP サーバーの作り直し（同時接続、日本語名、更新日時、REST、ABOR）、
+  ファイルブラウザの並べ替え・中身の表示・UTF-16 の名前、バッテリー容量の設定、
+  メニューと FTP のメモリを使うときだけ確保、Wi-Fi の状態確認で ac の接続を閉じる（sock_util.c）、
+  消えていた本家のコメントを復元。あわせて、FTP の上書きでの元ファイルの消失、
+  3gx セレクターの B で default.3gx が読まれる件、メニュー表示中にバッテリーを記録しない件、
+  boot.firm の差し替え失敗を知らせない件などを修正し、改変版の画面の文字列をローマ字表示に対応。
+  チートを、ゲームの起動時に自動で有効にする機能を追加（menus/cheats.c）。
+  メニュー・3gx セレクター・Memory dump の一覧で、十字左右で 1 画面ずつ動けるようにした（menu.c、plgloader.c、menus/memdump.c）。
+  十字キーを押し続けたときに続けて動くようにした（menu.c。v13.4 と同じ間隔）。
+  日本語の表示を追加（font_jp.c / font_jp.h、draw.c、menus/lang.c ほか）。字形は M+ BITMAP FONTS の
+  10 ドットの字から作った /luma/font_jp.bin（作るスクリプトは配布ソースの font_jp/mkfont_jp.py）を
+  SD カードから読む。チート名（UTF-8 / Shift-JIS）、ファイル名、改変版の画面の文字を漢字・かなで表示し、
+  ファイルが無いときは従来どおり ? とローマ字で表示する。
+- v1.4（v9.1 のみ）: PXI の終了処理を本家 Luma3DS（2020 年の修正）に合わせた。
+  メニュー用のメモリを確保できないときも、致命的なエラーの画面を表示する（errdisp.c）。
+  cheats.txt の読み込みで、チートを入れる領域（16KB）の残りを確かめるようにした（menus/cheats.c）。
+
+### 2026-10-23 — ELVES
+- 3gx セレクター・破壊的 3gx の警告を表示している間は、Rosalina メニューを開かないようにした。
+  Rosalina メニューを開いている間にこれらを出すときは、閉じるまで待つ。これまでは 2 つの画面が
+  同時に動き、同じボタン入力を両方が受け取っていた。
+- フォルダ内の .3gx がすべて世代違いのとき、default.3gx に切り替えていたのを、
+  先頭のファイルを開いて "Outdated plugin file" などを表示するようにした。
+- ファイルブラウザの上書き貼り付けで、コピーに失敗すると元のファイルが消えていたのを修正した。
+  一時ファイルに書き終えてから、元のファイルを退避して差し替える。
+
+### 2026-10-24 — ELVES
+- Colors、Language / Gengo、3gx / txt checker、Check SD Card、Battery info、Memory dump を削除した
+  （battery.c、memdump.c、sha256.c とそのヘッダも削除）。画面の色は本家と同じ固定の色に戻した。
+- 表示を日本語（漢字・かな）に固定した。/luma/lang.cfg は読まない。
+- 改変版の画面で使う字の字形を `font_jp_ui.h` として埋め込んだ（`font_jp/mkfont_jp_ui.py` で
+  font_jp.bin から作る）。/luma/font_jp.bin が無くても、改変版の画面は漢字・かなで出る。
+  font_jp.bin はチート名・ファイル名の漢字と、Shift-JIS の cheats.txt を読むときにだけ使う（無ければ ?）。
+- バージョン切り替えの失敗の知らせにあった「Check SD Card で確認してください」を
+  「SD カードを確認してください」にした。
+
+### 2026-10-24 (2) — ELVES
+- Rosalina の表示を、エラーの知らせを除いて日本語にした（メニューの項目、画面のタイトル、
+  操作の案内、うまくいったときの知らせ、注意書き、クレジットなど）。日本語と英語を並べていた
+  知らせ（破壊的 3gx の警告、SD の空き容量の警告、キーの案内）は日本語だけにした。
+- 失敗したことやできなかったことを知らせる文（"Operation failed (0x...)"、"Couldn't read file" など）、
+  /luma/log.txt に書く文、エラー画面（errdisp.c）、HOME ボタンが使えないときの知らせ
+  （DispWarningOnHome）は変えていない。ボタンの名前（メニューを開くボタンの表示）と、
+  InputRedirection などの名前も英語のまま。
+- メニューの項目を、バイト数ではなく画面の桁数で空白を埋めるようにした（menu.c）。
+  タイトルの右の版の表示の位置も桁数で決める。セーフモードの表示は「セーフ」にした。
+- 日本語にした画面の位置と幅を桁数で数えるようにした（ファイルブラウザの見出しとクリップボードの行、
+  FTP の転送中の行、メモリビューアーの案内の強調、プロセス一覧の注記の大きさ）。
+- 画面で使う字が増えたので `font_jp_ui.h` を作り直した。
+
+### 2026-10-24 (3) — ELVES
+- 起動時に新しい版を確かめるようにした（update_check.c）。Wi-Fi に繋がったあと 1 度だけ、
+  GitHub の最新のリリースの名前を取る。動いている版（menu.h の FORK_PACKAGE_TAG）より新しければ、
+  Rosalina メニューを開いたとき（起動ごとに 1 度）とお知らせリスト（1 つの版につき 1 度）で知らせる。
+  確かめる先は build.bat の UPDATE_REPO で、空ならこの機能は動かない。セーフモードでは確かめない。
+- 3DS 本体の HTTPS は TLS 1.1 までで GitHub に繋がらないため、BearSSL 0.6（MIT、source/bearssl/）で
+  TLS 1.2 を話す（update_tls.c）。版の名前だけを取るので証明書は確かめない。ダウンロードは
+  更新アプリ（配布ソースの updater/）が証明書と SHA-256 を確かめて行う。
+- minisoc.c に名前の解決（socGethostbyname）を足した。socConnect も v13.4 から写した。
+- 確かめた結果などを /luma/update/ に書く（running.txt・check.txt・notified.txt。updater/README.md を参照）。
+
+### 2026-11-09 — ELVES
+- 新しい方の Luma を上流 v13.5 に上げたのにあわせ、相手の版を「new」と呼ぶようにした。SD カードの
+  フォルダは /3ds/luma/new/、/luma/chainload_ver.flag と /luma/update/running.txt に書く名前は "new" と "9.1"
+  （firm.c、menu.h、menus.c、update_check.c）。「バージョン切り替え」に出す相手の版は、ビルドのときに
+  Luma3DS_new/UPSTREAM_VERSION から取る（Makefile の `LUMA_NEW_VERSION`）。
+- 表示の言語を英語と日本語で切り替えられるようにした（Rosalina の「言語 / Language」）。選んだ言語は
+  /luma/lang.cfg（'0' が英語、'1' が日本語）に書き、新しい方の Luma と共有する。lang.cfg が無いときは
+  本体の言語が日本語なら日本語、それ以外は英語にして、lang.cfg に書く。2026-10-24 の
+  「/luma/lang.cfg は読まない」は取りやめた。文字列は `TR("日本語", "English")`（include/menus/lang.h）で書く。
+  エラーの知らせは今までどおり（日英併記）。
+- 字形（font_jp.bin）を SD カードから読むのをやめ、boot.firm の後ろに付け足したものを読むようにした（font_jp.c）。
+- 起動時の Luma の設定画面を日本語にした（source/config.c、pin.c、fs.c、draw.c、draw.h、lang.c / lang.h、
+  font_jp_ui.h）。言語は /luma/lang.cfg に従い、無ければ日本語。エラーの画面は英語のまま。
+- 更新アプリのダウンロードで SHA-256 を確かめるのをやめた（2026-10-24 (3) の記述を参照。大きさを確かめる）。
+
 ## 改変したファイル (Modified Files)
 
-- source/firm.c, source/firm.h
-- source/main.c
-- sysmodules/rosalina/source/menus.c
-- sysmodules/rosalina/source/3gx.c
-- sysmodules/rosalina/include/3gx.h
-- sysmodules/rosalina/source/plgloader.c
-- sysmodules/rosalina/include/menus.h
-- Makefile, k11_extension/Makefile
+本配布物のベース（Luma3DS 3GX フォーク）から ELVES が変更したファイル（2026-11 時点）。
+
+- 追加したファイル
+  - source/lang.c, source/lang.h, source/font_jp_ui.h
+  - sysmodules/rosalina/source/menus/ftpd.c, lang.c, text_input.c
+  - sysmodules/rosalina/include/menus/ftpd.h, lang.h, text_input.h
+  - sysmodules/rosalina/source/font_jp.c, sysmodules/rosalina/include/font_jp.h, font_jp_ui.h
+  - sysmodules/rosalina/source/update_check.c, update_tls.c, sysmodules/rosalina/include/update_check.h,
+    update_tls.h、sysmodules/rosalina/source/bearssl/（BearSSL 0.6 の一部）
+- 変更したファイル
+  - source/firm.c, source/firm.h, source/main.c, source/fs.c, source/fs.h, source/fmt.c,
+    source/patches.c, source/buttons.h, source/config.c, source/draw.c, source/draw.h, source/pin.c
+  - sysmodules/rosalina/source/menus/cheats.c, sysmodules/rosalina/include/menus/cheats.h
+  - sysmodules/rosalina/source/menus/debugger.c, miscellaneous.c, n3ds.c, process_list.c,
+    sysconfig.c（表示の日本語化）
+  - sysmodules/rosalina/source/main.c, menu.c, menus.c, draw.c, errdisp.c, fmt.c, ifile.c,
+    sock_util.c, minisoc.c, 3gx.c, plgloader.c, gdb/debug.c
+  - sysmodules/rosalina/include/3gx.h, draw.h, ifile.h, menu.h, menus.h, minisoc.h
+  - sysmodules/pxi/source/main.c
+  - Makefile、k11_extension/Makefile、sysmodules/*/Makefile ほか各 Makefile（ビルド設定）
 
 ## ビルド要件
 
-- devkitARM / libctru 2.2.2 / armips / makerom / firmtool
+- devkitARM / libctru v2.2.2（build.bat が .libctru に用意する）/ armips / makerom / firmtool

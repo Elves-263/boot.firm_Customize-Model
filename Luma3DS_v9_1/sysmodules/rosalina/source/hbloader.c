@@ -24,7 +24,7 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/* This file was entirely written by fincs */
 
 #include <3ds.h>
 #include "hbloader.h"
@@ -74,47 +74,47 @@ static const char serviceList[32][8] =
 
 static const u64 dependencyList[] =
 {
-    0x0004013000002402LL, 
-    0x0004013000001502LL, 
-    0x0004013000003402LL, 
-    0x0004013000001602LL, 
-    0x0004013000001702LL, 
-    0x0004013000001802LL, 
-    0x0004013000002702LL, 
-    0x0004013000002802LL, 
-    0x0004013000001A02LL, 
-    0x0004013000001B02LL, 
-    0x0004013000001C02LL, 
-    0x0004013000001D02LL, 
-    0x0004013000002902LL, 
-    0x0004013000001E02LL, 
-    0x0004013000003302LL, 
-    0x0004013000001F02LL, 
-    0x0004013000002002LL, 
-    0x0004013000002B02LL, 
-    0x0004013000003502LL, 
-    0x0004013000002C02LL, 
-    0x0004013000002D02LL, 
-    0x0004013000002102LL, 
-    0x0004013000003102LL, 
-    0x0004013000002202LL, 
-    0x0004013000003702LL, 
-    0x0004013000002E02LL, 
-    0x0004013000002302LL, 
-    0x0004013000002F02LL, 
+    0x0004013000002402LL, //ac
+    0x0004013000001502LL, //am
+    0x0004013000003402LL, //boss
+    0x0004013000001602LL, //camera
+    0x0004013000001702LL, //cfg
+    0x0004013000001802LL, //codec
+    0x0004013000002702LL, //csnd
+    0x0004013000002802LL, //dlp
+    0x0004013000001A02LL, //dsp
+    0x0004013000001B02LL, //gpio
+    0x0004013000001C02LL, //gsp
+    0x0004013000001D02LL, //hid
+    0x0004013000002902LL, //http
+    0x0004013000001E02LL, //i2c
+    0x0004013000003302LL, //ir
+    0x0004013000001F02LL, //mcu
+    0x0004013000002002LL, //mic
+    0x0004013000002B02LL, //ndm
+    0x0004013000003502LL, //news
+    0x0004013000002C02LL, //nim
+    0x0004013000002D02LL, //nwm
+    0x0004013000002102LL, //pdn
+    0x0004013000003102LL, //ps
+    0x0004013000002202LL, //ptm
+    0x0004013000003702LL, //ro
+    0x0004013000002E02LL, //socket
+    0x0004013000002302LL, //spi
+    0x0004013000002F02LL, //ssl
 };
 
 static const u32 kernelCaps[] =
 {
-    0xFC00022C, 
-    0xFF81FF50, 
-    0xFF81FF58, 
-    0xFF81FF70, 
-    0xFF81FF78, 
-    0xFF91F000, 
-    0xFF91F600, 
-    0xFF002101, 
-    0xFE000200, 
+    0xFC00022C, // Kernel release version: 8.0 (necessary for using the new linear mapping)
+    0xFF81FF50, // RW static mapping: 0x1FF50000
+    0xFF81FF58, // RW static mapping: 0x1FF58000
+    0xFF81FF70, // RW static mapping: 0x1FF70000
+    0xFF81FF78, // RW static mapping: 0x1FF78000
+    0xFF91F000, // RO static mapping: 0x1F000000
+    0xFF91F600, // RO static mapping: 0x1F600000
+    0xFF002101, // Exflags: APPLICATION memtype + "Allow debug" + "Access core2"
+    0xFE000200, // Handle table size: 0x200
 };
 
 static MyThread hbldrThread;
@@ -235,7 +235,7 @@ static void HBLDR_HandleCommands(void)
                 error(cmdbuf, 0xD9001830);
                 break;
             }
-            
+            // No need to do anything - the kernel already copied the data to our buffer
             cmdbuf[0] = IPC_MakeHeader(3, 1, 0);
             cmdbuf[1] = 0;
             break;
@@ -248,9 +248,9 @@ static void HBLDR_HandleCommands(void)
                 break;
             }
 
-            
+            // Perform ExHeader patches
             exheader_header* exh = (exheader_header*)cmdbuf[2];
-            u32 stacksize = 4096; 
+            u32 stacksize = 4096; // 3dsx/libctru don't require anymore than this
             memcpy(exh->codesetinfo.name, "3dsx_app", 8);
             memcpy(exh->codesetinfo.stacksize, &stacksize, 4);
             memset(&exh->deplist, 0, sizeof(exh->deplist));
@@ -287,16 +287,16 @@ static void HBLDR_HandleCommands(void)
             memcpy(kcaps1->descriptors, kernelCaps, sizeof(kernelCaps));
 
             u64 lastdep = sizeof(dependencyList)/8;
-            if (osGetFirmVersion() >= SYSTEM_VERSION(2,50,0)) 
+            if (osGetFirmVersion() >= SYSTEM_VERSION(2,50,0)) // 9.6+ FIRM
             {
-                exh->deplist.programid[lastdep++] = 0x0004013000004002ULL; 
+                exh->deplist.programid[lastdep++] = 0x0004013000004002ULL; // nfc
                 strncpy((char*)&localcaps0->serviceaccesscontrol[0x20], "nfc:u", 8);
                 strncpy((char*)&localcaps1->serviceaccesscontrol[0x20], "nfc:u", 8);
                 s64 dummy = 0;
                 bool isN3DS = svcGetSystemInfo(&dummy, 0x10001, 0) == 0;
                 if (isN3DS)
                 {
-                    exh->deplist.programid[lastdep++] = 0x0004013020004102ULL; 
+                    exh->deplist.programid[lastdep++] = 0x0004013020004102ULL; // mvd
                     strncpy((char*)&localcaps0->serviceaccesscontrol[0x21], "mvd:STD", 8);
                     strncpy((char*)&localcaps1->serviceaccesscontrol[0x21], "mvd:STD", 8);
                 }
@@ -342,13 +342,13 @@ void hbldrThreadMain(void)
         handles[0] = serverHandle;
         handles[1] = sessionHandle;
 
-        if(replyTarget == 0) 
+        if(replyTarget == 0) // k11
             cmdbuf[0] = 0xFFFF0000;
         res = svcReplyAndReceive(&index, handles, sessionHandle == 0 ? 1 : 2, replyTarget);
 
         if(R_FAILED(res))
         {
-            if((u32)res == 0xC920181A) 
+            if((u32)res == 0xC920181A) // session closed by remote
             {
                 svcCloseHandle(sessionHandle);
                 sessionHandle = 0;

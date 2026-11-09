@@ -34,7 +34,7 @@
 #define REG_DUMP_SIZE   4 * 23
 #define CODE_DUMP_SIZE  96
 
-
+// Return true if parameters are invalid
 static bool checkExceptionHandlerValidity(KProcess *process, vu32 *threadLocalStorage)
 {
     if (process == NULL)
@@ -86,7 +86,7 @@ bool isExceptionFatal(u32 spsr, u32 *regs, u32 index)
         if(thread != NULL && thread->threadLocalStorage != NULL && *((vu32 *)thread->threadLocalStorage + 0x10) != 0)
            return checkExceptionHandlerValidity(currentProcess, thread->threadLocalStorage);
 
-        if(index == 3 && strcmp(codeSetOfProcess(currentProcess)->processName, "menu") == 0 && 
+        if(index == 3 && strcmp(codeSetOfProcess(currentProcess)->processName, "menu") == 0 && // workaround a Home Menu bug leading to a dabort
            regs[0] == 0x3FFF && regs[2] == 0 && regs[5] == 2 && regs[7] == 1)
             return false;
     }
@@ -128,18 +128,18 @@ void fatalExceptionHandlersMain(u32 *registerDump, u32 type, u32 cpuId)
 
     registerDump[15] = pc;
 
-    
-    u8 *instr = (u8 *)pc + ((cpsr & 0x20) ? 2 : 4) - (dumpHeader.codeDumpSize >> 1) ; 
+    //Dump code
+    u8 *instr = (u8 *)pc + ((cpsr & 0x20) ? 2 : 4) - (dumpHeader.codeDumpSize >> 1) ; //wouldn't work well on 32-bit Thumb instructions, but it isn't much of a problem
     dumpHeader.codeDumpSize = ((u32)instr & (((cpsr & 0x20) != 0) ? 1 : 3)) != 0 ? 0 : safecpy(codeDump, instr, dumpHeader.codeDumpSize);
 
-    
+    //Copy register dump and code dump
     final = (u8 *)(finalBuffer + sizeof(ExceptionDumpHeader));
     memcpy(final, registerDump, dumpHeader.registerDumpSize);
     final += dumpHeader.registerDumpSize;
     memcpy(final, codeDump, dumpHeader.codeDumpSize);
     final += dumpHeader.codeDumpSize;
 
-    
+    //Dump stack in place
     dumpHeader.stackDumpSize = safecpy(final, (const void *)registerDump[13], 0x1000 - (registerDump[13] & 0xFFF));
     final += dumpHeader.stackDumpSize;
 
@@ -159,6 +159,6 @@ void fatalExceptionHandlersMain(u32 *registerDump, u32 type, u32 cpuId)
 
     dumpHeader.totalSize = sizeof(ExceptionDumpHeader) + dumpHeader.registerDumpSize + dumpHeader.codeDumpSize + dumpHeader.stackDumpSize + dumpHeader.additionalDataSize;
 
-    
+    //Copy header (actually optimized by the compiler)
     *(ExceptionDumpHeader *)finalBuffer = dumpHeader;
 }

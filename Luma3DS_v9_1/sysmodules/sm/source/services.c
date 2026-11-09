@@ -11,7 +11,7 @@ This is part of 3ds_sm, which is licensed under the MIT license (see LICENSE for
 #include "list.h"
 
 ServiceInfo servicesInfo[0xA0] = { 0 };
-u32 nbServices = 0; 
+u32 nbServices = 0; // including "ports" registered with getPort
 
 static Result checkServiceName(const char *name, s32 nameSize)
 {
@@ -42,7 +42,7 @@ static bool checkServiceAccess(SessionData *sessionData, const char *name, s32 n
     (void)name;
     (void)nameSize;
 
-    return true; 
+    return true; // Service access list checks removed for Luma3DS, see original 3ds_sm for implementation details.
 }
 
 static Result doRegisterServiceOrPort(u32 pid, Handle *serverPort, Handle clientPort, const char *name, s32 nameSize, s32 maxSessions, bool isNamedPort)

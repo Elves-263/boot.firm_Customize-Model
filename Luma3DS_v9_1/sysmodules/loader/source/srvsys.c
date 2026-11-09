@@ -48,7 +48,7 @@ Result srvSysRegisterClient(void)
   Result rc = 0;
   u32* cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x1,0,2); 
+  cmdbuf[0] = IPC_MakeHeader(0x1,0,2); // 0x10002
   cmdbuf[1] = IPC_Desc_CurProcessHandle();
 
   if(R_FAILED(rc = svcSendSyncRequest(srvHandle)))return rc;
@@ -70,7 +70,7 @@ Result srvSysExit()
 
   if (srvHandle != 0) svcCloseHandle(srvHandle);
   else svcBreak(USERBREAK_ASSERT);
-  rc = (Result)srvHandle; 
+  rc = (Result)srvHandle; // yeah, I think this is a benign bug
   srvHandle = 0;
   srvRefCount--;
   RecursiveLock_Unlock(&initLock);
@@ -82,7 +82,7 @@ Result srvSysGetServiceHandle(Handle* out, const char* name)
   Result rc = 0;
   u32* cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x5,4,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x5,4,0); // 0x50100
   strncpy((char*) &cmdbuf[1], name,8);
   cmdbuf[3] = strlen(name);
   cmdbuf[4] = 0x0;
@@ -113,7 +113,7 @@ Result srvSysReceiveNotification(u32* notificationIdOut)
   Result rc = 0;
   u32* cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0xB,0,0); 
+  cmdbuf[0] = IPC_MakeHeader(0xB,0,0); // 0xB0000
 
   if(R_FAILED(rc = svcSendSyncRequest(srvHandle)))return rc;
 
@@ -127,7 +127,7 @@ Result srvSysRegisterService(Handle* out, const char* name, int maxSessions)
   Result rc = 0;
   u32* cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x3,4,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x3,4,0); // 0x30100
   strncpy((char*) &cmdbuf[1], name,8);
   cmdbuf[3] = strlen(name);
   cmdbuf[4] = maxSessions;
@@ -144,7 +144,7 @@ Result srvSysUnregisterService(const char* name)
   Result rc = 0;
   u32* cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x4,3,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x4,3,0); // 0x400C0
   strncpy((char*) &cmdbuf[1], name,8);
   cmdbuf[3] = strlen(name);
 

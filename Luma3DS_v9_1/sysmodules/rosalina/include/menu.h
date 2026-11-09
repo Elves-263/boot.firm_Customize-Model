@@ -26,18 +26,23 @@
 
 #pragma once
 
+// 版の名前（SD:/3ds/luma/<名前>/boot.firm と、版の切り替えのしるし・running.txt に使う）。
+// 新しい方の Luma は、上流の版が変わってもフォルダが変わらないよう "new" にする
+#define FORK_LUMA_ID       "9.1"
+#define FORK_OTHER_ID      "new"
+// 画面に出す版。LUMA_NEW_VERSION は Makefile が Luma3DS_new/UPSTREAM_VERSION から渡す（v13.5 なら "13.5"）
 #define FORK_LUMA_VERSION  "9.1"
-#define FORK_OTHER_VERSION "13.4"
-#define FORK_PACKAGE_TAG   "v1.3"
+#define FORK_OTHER_VERSION LUMA_NEW_VERSION
+#define FORK_PACKAGE_TAG   "v1.4"
+#define FORK_TITLE_TAG       "[v" FORK_LUMA_VERSION " / " FORK_PACKAGE_TAG "]"
+#define FORK_TITLE_TAG_SHORT "[v" FORK_LUMA_VERSION "]"
 
-extern u32 g_accentColor;
-extern u32 g_textColor;
-extern u32 g_cursorColor;
-void AccentColor_EnsureLoaded(void);
 void LogLine(const char *msg);
 void SDSpaceWarnIfLow(void);
+void ChainloadCheckFailed(void);
+void ChainloadWarnIfFailed(void);
 extern bool g_safeMode;
-#define MENU_WORK_BUF_SIZE 0x10000
+#define MENU_WORK_BUF_SIZE 0x8000
 extern u8 g_menuWorkBuf[MENU_WORK_BUF_SIZE];
 
 #include <3ds/types.h>
@@ -58,6 +63,8 @@ extern u8 g_menuWorkBuf[MENU_WORK_BUF_SIZE];
 #define BUTTON_L1         (1 << 9)
 #define BUTTON_X          (1 << 10)
 #define BUTTON_Y          (1 << 11)
+
+#define DIRECTIONAL_KEYS  (BUTTON_DOWN | BUTTON_UP | BUTTON_LEFT | BUTTON_RIGHT)
 
 #define DEFAULT_MENU_COMBO  (BUTTON_L1 | BUTTON_DOWN | BUTTON_SELECT)
 
@@ -96,8 +103,13 @@ u32     waitComboWithTimeout(u32 msec);
 u32     waitCombo(void);
 
 MyThread *menuCreateThread(void);
-void    menuEnter(void);
+bool    menuEnter(void);
+bool    menuEnterIfClosed(void);
+bool    menuEnterWhenClosed(void);
+void    menuEnterForFatalError(void);
 void    menuLeave(void);
+bool    menuIsOpen(void);
+u32     menuPageMove(u32 pos, u32 first, u32 last, u32 page, bool forward);
 void    menuThreadMain(void);
 void    menuShow(Menu *root);
 void    DispMessage(const char *title, const char *message);

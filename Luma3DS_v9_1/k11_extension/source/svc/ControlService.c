@@ -41,10 +41,10 @@ Result ControlService(ServiceOp op, u32 varg1, u32 varg2)
             SessionInfo *info = NULL;
             KAutoObject *obj = KProcessHandleTable__ToKAutoObject(handleTable, (Handle)varg2);
             if(obj == NULL)
-                return 0xD8E007F7; 
+                return 0xD8E007F7; // invalid handle
             else
             {
-                
+                // not the exact same tests but it should work
                 if(strcmp(classNameOfAutoObject(obj), "KServerSession") == 0)
                     session = ((KServerSession *)obj)->parentSession;
                 else if(strcmp(classNameOfAutoObject(obj), "KClientSession") == 0)
@@ -58,8 +58,8 @@ Result ControlService(ServiceOp op, u32 varg1, u32 varg2)
                 res = 0xD8E007F7;
             else
             {
-                
-                
+                // names are limited to 11 characters (for ports)
+                // kernelToUsrStrncpy doesn't clear trailing bytes
                 char name[12] = { 0 };
                 strncpy(name, info->name, 12);
                 res = kernelToUsrMemcpy8((void *)varg1, name, strlen(name) + 1) ? 0 : 0xE0E01BF5;
@@ -85,7 +85,7 @@ Result ControlService(ServiceOp op, u32 varg1, u32 varg2)
             info = SessionInfo_FindFirst(name);
 
             if(info == NULL)
-                return 0x9401BFE; 
+                return 0x9401BFE; // timeout (the wanted service is likely not initalized)
             else
             {
                 Handle out;

@@ -42,7 +42,7 @@ Result CopyHandle(Handle *outHandle, Handle outProcessHandle, Handle inHandle, H
         inProcess = KProcessHandleTable__ToKProcess(handleTable, inProcessHandle);
 
     if(inProcess == NULL)
-        return 0xD8E007F7; 
+        return 0xD8E007F7; // invalid handle
 
     if(outProcessHandle == CUR_PROCESS_HANDLE)
     {
@@ -55,7 +55,7 @@ Result CopyHandle(Handle *outHandle, Handle outProcessHandle, Handle inHandle, H
     if(outProcess == NULL)
     {
         ((KAutoObject *)inProcess)->vtable->DecrementReferenceCount((KAutoObject *)inProcess);
-        return 0xD8E007F7; 
+        return 0xD8E007F7; // invalid handle
     }
 
     KAutoObject *obj = KProcessHandleTable__ToKAutoObject(handleTableOfProcess(inProcess), inHandle);
@@ -63,7 +63,7 @@ Result CopyHandle(Handle *outHandle, Handle outProcessHandle, Handle inHandle, H
     {
         ((KAutoObject *)inProcess)->vtable->DecrementReferenceCount((KAutoObject *)inProcess);
         ((KAutoObject *)outProcess)->vtable->DecrementReferenceCount((KAutoObject *)outProcess);
-        return 0xD8E007F7; 
+        return 0xD8E007F7; // invalid handle
     }
 
     res = createHandleForProcess(outHandle, outProcess, obj);

@@ -8,7 +8,7 @@
 static Handle fsldrHandle;
 static int fsldrRefCount;
 
-
+// MAKE SURE fsreg has been init before calling this
 static Result fsldrPatchPermissions(void)
 {
   u32 pid;
@@ -16,8 +16,8 @@ static Result fsldrPatchPermissions(void)
   FS_ProgramInfo info;
   u32 storage[8] = {0};
 
-  storage[6] = 0x680; 
-  info.programId = 0x0004013000001302LL; 
+  storage[6] = 0x680; // SDMC access and NAND access flag
+  info.programId = 0x0004013000001302LL; // loader PID
   info.mediaType = MEDIATYPE_NAND;
   res = svcGetProcessId(&pid, 0xFFFF8001);
   if (R_SUCCEEDED(res))
@@ -59,7 +59,7 @@ Result FSLDR_InitializeWithSdkVersion(Handle session, u32 version)
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x861,1,2); 
+  cmdbuf[0] = IPC_MakeHeader(0x861,1,2); // 0x8610042
   cmdbuf[1] = version;
   cmdbuf[2] = 32;
 
@@ -73,7 +73,7 @@ Result FSLDR_SetPriority(u32 priority)
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x862,1,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x862,1,0); // 0x8620040
   cmdbuf[1] = priority;
 
   Result ret = 0;
@@ -86,7 +86,7 @@ Result FSLDR_OpenFileDirectly(Handle* out, FS_ArchiveID archiveId, FS_Path archi
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x803,8,4); 
+  cmdbuf[0] = IPC_MakeHeader(0x803,8,4); // 0x8030204
   cmdbuf[1] = 0;
   cmdbuf[2] = archiveId;
   cmdbuf[3] = archivePath.type;
@@ -114,7 +114,7 @@ Result FSLDR_OpenArchive(FS_Archive* archive, FS_ArchiveID id, FS_Path path)
 
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x80C,3,2); 
+  cmdbuf[0] = IPC_MakeHeader(0x80C,3,2); // 0x80C00C2
   cmdbuf[1] = id;
   cmdbuf[2] = path.type;
   cmdbuf[3] = path.size;
@@ -135,7 +135,7 @@ Result FSLDR_CloseArchive(FS_Archive archive)
 
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x80E,2,0); 
+  cmdbuf[0] = IPC_MakeHeader(0x80E,2,0); // 0x80E0080
   cmdbuf[1] = (u32) archive;
   cmdbuf[2] = (u32) (archive >> 32);
 
@@ -149,7 +149,7 @@ Result FSLDR_OpenDirectory(Handle* out, FS_Archive archive, FS_Path path)
 {
   u32 *cmdbuf = getThreadCommandBuffer();
 
-  cmdbuf[0] = IPC_MakeHeader(0x80B,4,2); 
+  cmdbuf[0] = IPC_MakeHeader(0x80B,4,2); // 0x80B0102
   cmdbuf[1] = (u32) archive;
   cmdbuf[2] = (u32) (archive >> 32);
   cmdbuf[3] = path.type;

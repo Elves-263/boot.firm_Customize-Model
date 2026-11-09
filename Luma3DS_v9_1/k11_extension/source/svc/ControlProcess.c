@@ -23,7 +23,7 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
         process = KProcessHandleTable__ToKProcess(handleTable, processHandle);
 
     if(process == NULL)
-        return 0xD8E007F7; 
+        return 0xD8E007F7; // invalid handle
 
     switch (op)
     {
@@ -66,10 +66,10 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
         }
         case PROCESSOP_GET_ON_MEMORY_CHANGE_EVENT:
         {
-            
+            // Only accept current process for this command
             if (process != currentCoreContext->objectContext.currentProcess)
             {
-                res = 0xD8E007F7; 
+                res = 0xD8E007F7; // invalid handle
                 break;
             }
 
@@ -84,8 +84,8 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
                 KAutoObject * event = KProcessHandleTable__ToKAutoObject(handleTable, *onMemoryLayoutChangeEvent);
 
                 createHandleForThisProcess((Handle *)varg2, event);
-                ((KAutoObject *)event)->vtable->DecrementReferenceCount((KAutoObject *)event);  
-                                                                                                
+                ((KAutoObject *)event)->vtable->DecrementReferenceCount((KAutoObject *)event);  ///< This avoid an extra operation on process exit
+                                                                                                ///< Closing the handle in the handle table will destroy the event
             }
 
             break;
@@ -93,10 +93,10 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
 
         case PROCESSOP_GET_ON_EXIT_EVENT:
         {
-            
+            // Only accept current process for this command
             if (process != currentCoreContext->objectContext.currentProcess)
             {
-                res = 0xD8E007F7; 
+                res = 0xD8E007F7; // invalid handle
                 break;
             }
 
@@ -114,12 +114,12 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
                 KAutoObject * event = KProcessHandleTable__ToKAutoObject(handleTable, *onProcessExitEvent);
 
                 createHandleForThisProcess((Handle *)varg2, event);
-                ((KAutoObject *)event)->vtable->DecrementReferenceCount((KAutoObject *)event); 
+                ((KAutoObject *)event)->vtable->DecrementReferenceCount((KAutoObject *)event); ///< See higher
 
                 event = KProcessHandleTable__ToKAutoObject(handleTable, *resumeProcessExitEvent);
 
                 createHandleForThisProcess((Handle *)varg3, event);
-                ((KAutoObject *)event)->vtable->DecrementReferenceCount((KAutoObject *)event); 
+                ((KAutoObject *)event)->vtable->DecrementReferenceCount((KAutoObject *)event); ///< See higher
             }
 
             break;
@@ -132,7 +132,7 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
             *(u32 *)varg2 = pa;
 
             if (pa == 0)
-                res = 0xE0E01BF5; 
+                res = 0xE0E01BF5; ///< Invalid address
 
             break;
         }
@@ -142,20 +142,20 @@ Result  ControlProcess(Handle processHandle, ProcessOp op, u32 varg2, u32 varg3)
 
             KRecursiveLock__Lock(criticalSectionLock);
 
-            if (varg2 == 0) 
+            if (varg2 == 0) // Unlock
             {
                 for(KLinkedListNode *node = threadList->list.nodes.first; node != (KLinkedListNode *)&threadList->list.nodes; node = node->next)
                 {
                     KThread *thread = (KThread *)node->key;
 
-                    if((thread->schedulingMask & 0xF) == 2) 
+                    if((thread->schedulingMask & 0xF) == 2) // thread is terminating
                         continue;
 
                     if(thread->schedulingMask & 0x40)
                         rosalinaRescheduleThread(thread, false);
                 }
             }
-            else 
+            else // Lock
             {
                 bool currentThreadsFound = false;
 

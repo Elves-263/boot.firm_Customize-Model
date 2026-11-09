@@ -24,7 +24,9 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/*
+*   Code for locating the SDMMC struct by Normmatt
+*/
 
 #pragma once
 

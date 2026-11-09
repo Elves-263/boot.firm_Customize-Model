@@ -128,3 +128,14 @@ Result IFile_Write(IFile *file, u64 *total, void *buffer, u32 len, u32 flags)
   *total = cur;
   return res;
 }
+
+FS_Path IFile_MakeUtf8Path(u16 *buf, const char *path)
+{
+  ssize_t units = utf8_to_utf16(buf, (const u8 *)path, IFILE_PATH_UNITS - 1);
+
+  if (units < 0 || units >= IFILE_PATH_UNITS)
+    return (FS_Path){ PATH_INVALID, 1, "" };
+
+  buf[units] = 0;
+  return (FS_Path){ PATH_UTF16, (u32)(units + 1) * 2, buf };
+}

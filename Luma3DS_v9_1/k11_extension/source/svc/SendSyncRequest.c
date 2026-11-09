@@ -37,7 +37,7 @@ Result SendSyncRequestHook(Handle handle)
     bool skip = false;
     Result res = 0;
 
-     
+     // not the exact same test but it should work
     bool isValidClientSession = clientSession != NULL && strcmp(classNameOfAutoObject(&clientSession->syncObject.autoObject), "KClientSession") == 0;
 
     if(isValidClientSession)
@@ -65,7 +65,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x10082:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && (strcmp(info->name, "cfg:u") == 0 || strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) 
+                if(info != NULL && (strcmp(info->name, "cfg:u") == 0 || strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) // GetConfigInfoBlk2
                     skip = doLangEmu(&res, cmdbuf);
 
                 break;
@@ -74,7 +74,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x10800:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && strcmp(info->name, "err:f") == 0) 
+                if(info != NULL && strcmp(info->name, "err:f") == 0) // Throw
                     skip = doErrfThrowHook(cmdbuf);
 
                 break;
@@ -83,7 +83,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x20000:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && (strcmp(info->name, "cfg:u") == 0 || strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) 
+                if(info != NULL && (strcmp(info->name, "cfg:u") == 0 || strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) // SecureInfoGetRegion
                     skip = doLangEmu(&res, cmdbuf);
 
                 break;
@@ -134,7 +134,7 @@ Result SendSyncRequestHook(Handle handle)
                 if(!hasStartedRosalinaNetworkFuncsOnce)
                     break;
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                skip = info != NULL && strcmp(info->name, "ndm:u") == 0; 
+                skip = info != NULL && strcmp(info->name, "ndm:u") == 0; // SuspendScheduler
                 if(skip)
                     cmdbuf[1] = 0;
                 break;
@@ -145,7 +145,7 @@ Result SendSyncRequestHook(Handle handle)
                 if(!hasStartedRosalinaNetworkFuncsOnce)
                     break;
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && strcmp(info->name, "ndm:u") == 0) 
+                if(info != NULL && strcmp(info->name, "ndm:u") == 0) // ResumeScheduler
                 {
                     cmdbuf[0] = 0x90040;
                     cmdbuf[1] = 0;
@@ -169,7 +169,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x4010082:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) 
+                if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) // GetConfigInfoBlk4
                     skip = doLangEmu(&res, cmdbuf);
 
                 break;
@@ -178,7 +178,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x4020082:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) 
+                if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) // GetConfigInfoBlk8
                     skip = doLangEmu(&res, cmdbuf);
 
                 break;
@@ -187,7 +187,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x8010082:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) 
+                if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0)) // GetConfigInfoBlk4
                     skip = doLangEmu(&res, cmdbuf);
 
                 break;
@@ -196,7 +196,7 @@ Result SendSyncRequestHook(Handle handle)
             case 0x8020082:
             {
                 SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession);
-                if(info != NULL && strcmp(info->name, "cfg:i") == 0) 
+                if(info != NULL && strcmp(info->name, "cfg:i") == 0) // GetConfigInfoBlk8
                     skip = doLangEmu(&res, cmdbuf);
 
                 break;
@@ -204,7 +204,7 @@ Result SendSyncRequestHook(Handle handle)
 
             case 0x4060000:
             {
-                SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession); 
+                SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession); // SecureInfoGetRegion
                 if(info != NULL && (strcmp(info->name, "cfg:s") == 0 || strcmp(info->name, "cfg:i") == 0))
                     skip = doLangEmu(&res, cmdbuf);
 
@@ -213,7 +213,7 @@ Result SendSyncRequestHook(Handle handle)
 
             case 0x8160000:
             {
-                SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession); 
+                SessionInfo *info = SessionInfo_Lookup(clientSession->parentSession); // SecureInfoGetRegion
                 if(info != NULL && strcmp(info->name, "cfg:i") == 0)
                     skip = doLangEmu(&res, cmdbuf);
 

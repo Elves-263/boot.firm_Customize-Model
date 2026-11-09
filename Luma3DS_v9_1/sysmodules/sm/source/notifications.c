@@ -10,7 +10,7 @@ This is part of 3ds_sm, which is licensed under the MIT license (see LICENSE for
 
 static bool doPublishNotification(ProcessData *processData, u32 notificationId, u32 flags)
 {
-    if((flags & 1) && processData->nbPendingNotifications != 0) 
+    if((flags & 1) && processData->nbPendingNotifications != 0) // only send if not already pending
     {
         for(u16 i = 0; i < processData->nbPendingNotifications; i++)
         {
@@ -19,7 +19,7 @@ static bool doPublishNotification(ProcessData *processData, u32 notificationId, 
         }
     }
 
-    
+    // Handle special case for home button notifications on Mode3 O3DS with plugin loaded
     if ((notificationId == 0x204 || notificationId == 0x205)
        && *(u32 *)0x1FF80030 == 3 && *(u32 *)0x1FF800F0)
     {
@@ -48,7 +48,7 @@ Result EnableNotification(SessionData *sessionData, Handle *notificationSemaphor
 
     if(processData == NULL)
     {
-        
+        // Section 0 modules have access to all services, so we need to register them here for notifications
         if(sessionData->pid < nbSection0Modules)
             processData = doRegisterProcess(sessionData->pid, NULL, 0);
         else

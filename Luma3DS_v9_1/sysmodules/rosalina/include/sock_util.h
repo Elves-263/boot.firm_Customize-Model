@@ -24,7 +24,7 @@
 *         reasonable ways as different from the original version.
 */
 
- 
+/* File mainly written by Stary */
 
 #pragma once
 #include <3ds/types.h>
@@ -64,11 +64,11 @@ typedef struct sock_ctx
 
 typedef struct sock_server
 {
-    
+    // params
     u32 host;
     int clients_per_server;
 
-    
+    // poll stuff
     struct pollfd poll_fds[MAX_CTXS];
     struct sock_ctx serv_ctxs[MAX_PORTS];
     struct sock_ctx *ctx_ptrs[MAX_CTXS];
@@ -78,7 +78,7 @@ typedef struct sock_server
     Handle started_event;
     bool compact_needed;
 
-    
+    // callbacks
     sock_accept_cb accept_cb;
     sock_data_cb data_cb;
     sock_close_cb close_cb;
