@@ -12,6 +12,8 @@ dir_source := source
 dir_include := include
 dir_build := build
 dir_out := ../../$(dir_build)
+# 改変版が新しい方と v9.1 で共通に使うコード（リポジトリ直下の common/。BearSSL は起動時の更新確認の TLS）
+dir_common := ../../../common
 
 LIBS := -lctru
 LIBDIRS	:= $(CTRULIB)
@@ -48,16 +50,16 @@ UPDATE_REPO ?=
 # 新しい方の Luma の版（13.5 など）。Luma3DS_new/UPSTREAM_VERSION に書いてある（build.bat も同じものを渡す）
 LUMA_NEW_VERSION ?= $(patsubst v%,%,$(strip $(shell cat "$(CURDIR)/../../../Luma3DS_new/UPSTREAM_VERSION")))
 
-# TR()（include/menus/lang.h）は日本語と英語を \0 でつないだ 1 つの文字列なので、書式の検査は日本語のほうだけになる
-# （-Wno-format-contains-nul）。英語のほうの書式は font_jp/chk_tr.py で日本語のほうと同じか確かめる
 CFLAGS := -Wall -Wextra $(WERROR) $(HARDERRORS) -MMD -MP -marm $(ASFLAGS) -mtp=soft -fno-builtin -std=c11 -O2 -ffast-math -mword-relocations \
-		-fomit-frame-pointer -ffunction-sections -fdata-sections $(INCLUDE) -I$(dir_include) -I$(dir_source)/bearssl -DARM11 -D_3DS \
-		-DUPDATE_REPO="\"$(UPDATE_REPO)\"" -DLUMA_NEW_VERSION="\"$(LUMA_NEW_VERSION)\"" -Wno-format-contains-nul
+		-fomit-frame-pointer -ffunction-sections -fdata-sections $(INCLUDE) -I$(dir_include) -I$(dir_common)/rosalina/include -I$(dir_common)/bearssl -DARM11 -D_3DS \
+		-DUPDATE_REPO="\"$(UPDATE_REPO)\"" -DLUMA_NEW_VERSION="\"$(LUMA_NEW_VERSION)\""
 LDFLAGS := -specs=3dsx.specs -g $(ARCH) -mtp=soft -Wl,--section-start,.text=0x14000000 -Wl,--gc-sections
 
 objects = $(patsubst $(dir_source)/%.s, $(dir_build)/%.o, \
 		$(patsubst $(dir_source)/%.c, $(dir_build)/%.o, \
-		$(call rwildcard, $(dir_source), *.s *.c)))
+		$(call rwildcard, $(dir_source), *.s *.c))) \
+		$(patsubst $(dir_common)/%.c, $(dir_build)/common/%.o, \
+		$(call rwildcard, $(dir_common)/rosalina/source, *.c) $(wildcard $(dir_common)/bearssl/*.c))
 
 xml_files = $(call rwildcard, $(dir_source), *.xml)
 
@@ -84,7 +86,11 @@ $(dir_build)/xml_data.h: $(xml_files)
 $(dir_build)/gdb/xfer.o: $(dir_build)/xml_data.h
 $(dir_build)/memory.o : CFLAGS += -O3
 # BearSSL（TLS）は大きいので、速さより大きさを優先する
-$(dir_build)/bearssl/%.o : CFLAGS += -Os
+$(dir_build)/common/bearssl/%.o : CFLAGS += -Os
+
+$(dir_build)/common/%.o: $(dir_common)/%.c
+	@mkdir -p "$(@D)"
+	$(COMPILE.c) $(OUTPUT_OPTION) $<
 
 $(dir_build)/%.o: $(dir_source)/%.c
 	@mkdir -p "$(@D)"

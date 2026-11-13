@@ -4,8 +4,7 @@
 #   pip install pillow
 #   python3 tools/mkfont_ui.py <NotoSansCJK の .ttc があるフォルダ> [出力]
 #
-# 大きさごとに 5 つの書体を作る。本文（BODY）だけは JIS X 0208 の字をすべて入れ、
-# ほかは source/*.c の文字列に出てくる字と英数字だけを入れる（無い字は BODY で描く）。
+# 書体は本文（BODY）の 1 つだけ。JIS X 0208 の字をすべてと、source/*.c の文字列に出てくる字を入れる。
 #
 # ファイルの形（数値はすべてリトルエンディアン）:
 #   0x00  char[4]  "UIF1"
@@ -27,12 +26,8 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 FACES = [
-    # 名前,   ファイル,                     大きさ, 全部の字
-    ('SMALL', 'NotoSansCJK-Regular.ttc',    12,     False),
-    ('BODY',  'NotoSansCJK-Regular.ttc',    14,     True),
-    ('LABEL', 'NotoSansCJK-Medium.ttc',     15,     False),
-    ('TITLE', 'NotoSansCJK-Bold.ttc',       20,     False),
-    ('HUGE',  'NotoSansCJK-Bold.ttc',       30,     False),
+    # 名前,   ファイル,                     大きさ
+    ('BODY',  'NotoSansCJK-Regular.ttc',    14),
 ]
 TTC_INDEX_JP = 0
 
@@ -106,12 +101,11 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     out_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(here, '..', 'data', 'ui_font.bin')
 
-    ui = source_chars(os.path.join(here, '..', 'source'))
-    full = jis_chars() | ui
+    chars = jis_chars() | source_chars(os.path.join(here, '..', 'source'))
 
     faces = []
-    for name, fname, size, everything in FACES:
-        ascent, line, glyphs = render_face(os.path.join(fontdir, fname), size, full if everything else ui)
+    for name, fname, size in FACES:
+        ascent, line, glyphs = render_face(os.path.join(fontdir, fname), size, chars)
         faces.append((size, line, ascent, glyphs))
         print('%-5s %2dpx  %5d 字' % (name, size, len(glyphs)))
 

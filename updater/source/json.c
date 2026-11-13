@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify

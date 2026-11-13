@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -16,11 +16,12 @@
 *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Luma3DS_New の更新アプリ。起動すると、このアプリに入れた boot.firm（新しい方と v9.1）を SD カードに入れる
-// （公式の Luma3DS の boot.firm も置き換える）。GitHub の Releases で新しいバージョンを確かめ、
-// リポジトリの「更新.md」で更新内容と更新履歴を見せ、このアプリ自身を入れ直して更新する
-// （新しいアプリが、中に入っている新しい boot.firm を入れる）。
-// 画面は Rosalina と同じく黒い地に文字だけ（ui.c）。言葉は短く、ファイルの名前や場所などの細かいことは出さない
+// boot.firm_Customize-Model の更新アプリ。GitHub の Releases で新しいバージョンを確かめ、リポジトリの「更新.md」で
+// 更新内容と更新履歴を見せる。起動しただけでは何も入れず、「最新バージョンをインストール」を選んだときに、
+// 新しいバージョンがあればこのアプリ自身を入れ直し（入れ直したアプリが、中に入っている boot.firm を入れる）、
+// 無ければこのアプリに入れた boot.firm（新しい方と v9.1）を SD カードに入れる（公式の Luma3DS の boot.firm も
+// 置き換える）。更新内容・更新履歴からは、選んだ版（前の版も）のアプリに入れ直せる。
+// 画面は Rosalina と同じく文字だけ（ui.c）。言葉は短く、ファイルの名前や場所などの細かいことは出さない
 
 #include <3ds.h>
 #include <stdio.h>
@@ -54,17 +55,16 @@
 #define NOTE_LINES_MAX  1024
 
 #define MSG_RETRY       TR("時間をおいて、もう一度お試しください。", "Please try again later.")
-#define MSG_UPDATING    TR("更新しています。\n電源を切らないでください。", "Updating.\nDo not turn off the power.")
-#define MSG_INSTALLING  TR("Luma3DS_New を入れています。\n電源を切らないでください。", \
-                           "Installing Luma3DS_New.\nDo not turn off the power.")
+#define MSG_UPDATING    TR("ソフトを入れ替えています。\n電源を切らないでください。", "Replacing the software.\nDo not turn off the power.")
+#define MSG_INSTALLING  TR("boot.firm_Customize-Model を\n入れています。\n電源を切らないでください。", \
+                           "Installing boot.firm_Customize-Model.\nDo not turn off the power.")
 
 // 最初の画面の行
 enum
 {
-    ITEM_UPDATE,
+    ITEM_INSTALL,
     ITEM_NOTES,
     ITEM_HISTORY,
-    ITEM_INSTALL,
     ITEM_SOURCE,
     ITEM_AUTO,
 };
@@ -118,10 +118,16 @@ static bool App_HasUpdate(const App *a)
     return r != NULL && Version_Compare(r->tag, APP_VERSION) > 0 && Release_FindAsset(r, ASSET_CIA) != NULL;
 }
 
-// SD カードの Luma3DS_New がこのアプリより新しい（アプリを入れ直す前の古いアプリ）か
+// SD カードの boot.firm_Customize-Model がこのアプリより新しい（アプリを入れ直す前の古いアプリ）か
 static bool App_IsOutdated(const App *a)
 {
     return a->local.runningTag[0] != 0 && Version_Compare(a->local.runningTag, APP_VERSION) > 0;
+}
+
+// このアプリに入れた boot.firm を、まだ SD カードに入れていないか（SD カードの方が新しいときは除く）
+static bool App_NeedsInstall(const App *a)
+{
+    return Local_NeedsInstall(&a->local) && !App_IsOutdated(a);
 }
 
 static void App_SetStatus(App *a, UiStatus status, const char *text, const char *detail)
@@ -183,19 +189,22 @@ static void App_Refresh(App *a)
     else
         snprintf(ui->latest, sizeof(ui->latest), "-");
 
-    if (App_HasUpdate(a))
-        ui->items[n++] = (UiItem){ ITEM_UPDATE, TR("更新する", "Update"), NULL,
-                                   TR("Luma3DS_New を新しいバージョンに更新します。",
-                                      "Updates Luma3DS_New to the new version."), true };
+    // 入れるものがあれば「最新バージョンをインストール」、もう入っていれば「入れ直す」
+    bool install = App_HasUpdate(a) || App_NeedsInstall(a);
+    ui->items[n++] = (UiItem){ ITEM_INSTALL,
+                               install ? TR("最新バージョンをインストール", "Install the latest version") : TR("入れ直す", "Reinstall"), NULL,
+                               App_HasUpdate(a) ? TR("最新のバージョンをダウンロードして入れます。",
+                                                     "Downloads the latest version and installs it to the SD card.") :
+                               install ? TR("このソフトに入っている boot.firm_Customize-Model を、SD カードに入れます。",
+                                            "Installs the boot.firm_Customize-Model included in this software to the SD card.") :
+                                         TR("このソフトに入っている boot.firm_Customize-Model を、SD カードに入れ直します。",
+                                            "Reinstalls the boot.firm_Customize-Model included in this software to the SD card."), install };
     ui->items[n++] = (UiItem){ ITEM_NOTES, TR("更新内容", "What's new"), NULL,
                                TR("新しいバージョンで変わったところを見ます。",
                                   "Shows what changed in the newest version."), false };
     ui->items[n++] = (UiItem){ ITEM_HISTORY, TR("更新履歴", "Version history"), NULL,
                                TR("これまでのバージョンの変更点を見ます。",
                                   "Shows the changes in earlier versions."), false };
-    ui->items[n++] = (UiItem){ ITEM_INSTALL, TR("インストール", "Install"), NULL,
-                               TR("このソフトに入っている Luma3DS_New を、SD カードに入れ直します。",
-                                  "Reinstalls the Luma3DS_New included in this software to the SD card."), false };
     ui->items[n++] = (UiItem){ ITEM_SOURCE, TR("ソースコード", "Source code"), NULL,
                                TR("ソースコードの場所を、URL と QR コードで出します。",
                                   "Shows where to get the source code, as a URL and a QR code."), false };
@@ -273,11 +282,10 @@ static void App_Message(App *a, const char *text)
     App_WaitAnswer(a);
 }
 
-static void App_ProgressUpdate(void *ctx, const char *label, uint64_t done, uint64_t total)
+static void App_ProgressUpdate(void *ctx, uint64_t done, uint64_t total)
 {
     App *a = (App *)ctx;
 
-    (void)label;    // ファイルの名前は出さず、App_Update などが決めた言葉を出す
     a->ui.progressDone = done;
     a->ui.progressTotal = total;
     App_Draw(a);
@@ -324,7 +332,7 @@ static void App_Fetch(App *a)
     int detail;
     HttpsResult res;
 
-    Release_FreeList(&a->releases);
+    Release_ClearList(&a->releases);
     a->fetched = false;
     App_SetStatus(a, UI_STATUS_BUSY, TR("確認しています", "Checking"), "");
     App_Refresh(a);
@@ -356,9 +364,19 @@ static void App_Fetch(App *a)
     {
         char label[40];
         App_VersionLabel(label, sizeof(label), latest->tag);
-        snprintf(text, sizeof(text), TR("「更新する」を選ぶと、%s に更新します。", "Select \"Update\" to update to %s."), label);
+        snprintf(text, sizeof(text), TR("「最新バージョンをインストール」で %s に更新します。",
+                                        "Select \"Install the latest version\" to update to %s."), label);
         App_SetStatus(a, UI_STATUS_UPDATE, TR("新しいバージョンがあります", "A new version is available"), text);
-        a->ui.selected = 0;     // 「更新する」を選んでおく
+        a->ui.selected = 0;     // 「最新バージョンをインストール」を選んでおく
+    }
+    else if (App_NeedsInstall(a))
+    {
+        char label[40];
+        App_VersionLabel(label, sizeof(label), APP_VERSION);
+        snprintf(text, sizeof(text), TR("「最新バージョンをインストール」で %s を入れます。",
+                                        "Select \"Install the latest version\" to install %s to the SD card."), label);
+        App_SetStatus(a, UI_STATUS_UPDATE, TR("まだインストールしていません", "Not installed yet"), text);
+        a->ui.selected = 0;
     }
     else
         App_SetStatus(a, UI_STATUS_LATEST, TR("最新の状態です", "Up to date"), "");
@@ -412,41 +430,50 @@ static void App_ScrollNotes(App *a, u32 down)
         ui->noteScroll = ui->noteScroll > page ? ui->noteScroll - page : 0;
 }
 
-// 1 つの版の更新内容を読む。B で戻る
-static void App_NotesLoop(App *a, int index)
+static bool App_InstallVersion(App *a, int index);
+
+// 1 つの版の更新内容を読む。B で戻り、X でその版を入れる。アプリを起動し直すなら true
+static bool App_NotesLoop(App *a, int index)
 {
     UiView back = a->ui.view;
+    bool quit = false;
 
     App_LoadSection(a, index);
     a->ui.view = UI_VIEW_NOTES;
 
-    while (aptMainLoop())
+    while (!quit && aptMainLoop())
     {
-        int x, y;
+        int x, y, hit;
 
         hidScanInput();
         u32 down = hidKeysDown() | (hidKeysDownRepeat() & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT));
-        if ((down & KEY_B) || (App_Touched(&x, &y) && Ui_HitButtons(&a->ui, x, y) == 0))
+        hit = App_Touched(&x, &y) ? Ui_HitButtons(&a->ui, x, y) : -1;
+        if ((down & KEY_B) || hit == 0)
             break;
+        if ((down & KEY_X) || hit == 2)
+            quit = App_InstallVersion(a, index);
         App_ScrollNotes(a, down);
         App_Draw(a);
     }
     a->ui.view = back;
+    return quit;
 }
 
 // 新しいバージョンがあればその版、無ければ 更新.md のいちばん上の版
-static void App_ShowNotes(App *a)
+static bool App_ShowNotes(App *a)
 {
     const Release *latest = App_Latest(a);
     int index = 0;
+    bool quit;
 
     if (!App_HasChangelog(a))
-        return;
+        return false;
     for (int i = 0; latest != NULL && i < a->sectionCount; ++i)
         if (App_SameTag(a->sections[i].tag, latest->tag))
             index = i;
-    App_NotesLoop(a, index);
+    quit = App_NotesLoop(a, index);
     a->ui.view = UI_VIEW_MAIN;
+    return quit;
 }
 
 static void App_SelectVersion(App *a, int index)
@@ -462,13 +489,15 @@ static void App_SelectVersion(App *a, int index)
     App_LoadSection(a, index);
 }
 
-static void App_HistoryLoop(App *a)
+// アプリを起動し直すなら true
+static bool App_HistoryLoop(App *a)
 {
     UiState *ui = &a->ui;
     const Release *latest = App_Latest(a);
+    bool quit = false;
 
     if (!App_HasChangelog(a))
-        return;
+        return false;
 
     ui->versionCount = a->sectionCount;
     for (int i = 0; i < ui->versionCount; ++i)
@@ -481,7 +510,7 @@ static void App_HistoryLoop(App *a)
     ui->view = UI_VIEW_HISTORY;
     App_SelectVersion(a, 0);
 
-    while (aptMainLoop())
+    while (!quit && aptMainLoop())
     {
         int x, y, hit;
 
@@ -493,14 +522,16 @@ static void App_HistoryLoop(App *a)
             if ((hit = Ui_HitVersion(ui, x, y)) >= 0)
             {
                 if (hit == ui->versionSelected)
-                    App_NotesLoop(a, hit);
+                    quit = App_NotesLoop(a, hit);
                 else
                     App_SelectVersion(a, hit);
             }
             else if ((hit = Ui_HitButtons(ui, x, y)) == 0)
                 break;
             else if (hit == 1)
-                App_NotesLoop(a, ui->versionSelected);
+                quit = App_NotesLoop(a, ui->versionSelected);
+            else if (hit == 2)
+                quit = App_InstallVersion(a, ui->versionSelected);
         }
         if (down & KEY_B)
             break;
@@ -509,12 +540,15 @@ static void App_HistoryLoop(App *a)
         if ((down & KEY_UP) && ui->versionSelected > 0)
             App_SelectVersion(a, ui->versionSelected - 1);
         if (down & KEY_A)
-            App_NotesLoop(a, ui->versionSelected);
+            quit = App_NotesLoop(a, ui->versionSelected);
+        else if (down & KEY_X)
+            quit = App_InstallVersion(a, ui->versionSelected);
         App_ScrollNotes(a, down & (KEY_L | KEY_R | KEY_LEFT | KEY_RIGHT));
 
         App_Draw(a);
     }
     ui->view = UI_VIEW_MAIN;
+    return quit;
 }
 
 // ---------------------------------------------------------------- ソースコード
@@ -580,8 +614,8 @@ static void App_LockSystem(bool lock)
     aptSetSleepAllowed(!lock);
 }
 
-// このアプリに入れた boot.firm を SD カードに入れる。起動したときは違うものだけを入れ、
-// 「インストール」を選んだとき（all）はすべて入れ直す
+// このアプリに入れた boot.firm を SD カードに入れる。アプリを入れ直した続きでは違うものだけを入れ、
+// メニューから選んだとき（all）はすべて入れ直す
 static void App_InstallBundled(App *a, bool all)
 {
     // SD:/boot.firm は最後に差し替える（途中で失敗しても起動できる版を残すため）
@@ -591,8 +625,7 @@ static void App_InstallBundled(App *a, bool all)
     char text[320], label[40];
     int steps = 0, step = 0;
 
-    // 起動したときは、SD カードの方が新しければ（アプリを入れ直せなかったときなど）古い版に戻さない
-    if (!all && (!Local_NeedsInstall(&a->local) || App_IsOutdated(a)))
+    if (!all && !Local_NeedsInstall(&a->local))
         return;
 
     for (int p = 0; p < PART_COUNT; ++p)
@@ -602,7 +635,7 @@ static void App_InstallBundled(App *a, bool all)
     a->ui.cancellable = false;
     a->ui.progressDone = 0;
     a->ui.progressTotal = (uint64_t)steps;
-    App_SetStatus(a, UI_STATUS_BUSY, TR("Luma3DS_New を入れています", "Installing Luma3DS_New"),
+    App_SetStatus(a, UI_STATUS_BUSY, TR("boot.firm_Customize-Model を入れています", "Installing boot.firm_Customize-Model"),
                   TR("電源を切らないでください。", "Do not turn off the power."));
     App_Refresh(a);
     App_SetOverlay(a, UI_OVERLAY_PROGRESS, MSG_INSTALLING);
@@ -636,12 +669,12 @@ static void App_InstallBundled(App *a, bool all)
         return;
     }
 
-    snprintf(text, sizeof(text), TR("本体を再起動すると、Luma3DS_New %s になります。",
-                                    "Luma3DS_New %s will be used after a restart."), label);
+    snprintf(text, sizeof(text), TR("本体を再起動すると、boot.firm_Customize-Model %s になります。",
+                                    "boot.firm_Customize-Model %s will be used after a restart."), label);
     App_SetStatus(a, UI_STATUS_DONE, TR("入れ終わりました", "Installed"), text);
     App_Refresh(a);
-    snprintf(text, sizeof(text), TR("Luma3DS_New %s を入れました。\n本体を再起動すると使えるようになります。\n今すぐ再起動しますか？",
-                                    "Luma3DS_New %s has been installed.\nRestart the system to use it.\nRestart now?"), label);
+    snprintf(text, sizeof(text), TR("boot.firm_Customize-Model %s を\n入れました。\n本体を再起動すると使えるようになります。\n今すぐ再起動しますか？",
+                                    "boot.firm_Customize-Model %s has been installed.\nRestart the system to use it.\nRestart now?"), label);
     if (App_Confirm(a, text, TR("再起動", "Restart"), TR("あとで", "Later")))
         APT_HardwareResetAsync();
 }
@@ -651,10 +684,11 @@ static void App_Reinstall(App *a)
     char text[320], label[40];
 
     App_VersionLabel(label, sizeof(label), APP_VERSION);
-    snprintf(text, sizeof(text), TR("このソフトに入っている Luma3DS_New %s（v" LUMA_NEW_VERSION "・v9.1）を、"
-                                    "SD カードに入れ直します。\nよろしいですか？",
-                                    "Luma3DS_New %s (v" LUMA_NEW_VERSION " and v9.1) included in this software "
-                                    "will be reinstalled to the SD card.\nContinue?"), label);
+    snprintf(text, sizeof(text), TR("このソフトに入っている\nboot.firm_Customize-Model %s\n（v" LUMA_NEW_VERSION "・v9.1）を、"
+                                    "SD カードに%s。\nよろしいですか？",
+                                    "boot.firm_Customize-Model %s (v" LUMA_NEW_VERSION " and v9.1) included in this software "
+                                    "will be %s to the SD card.\nContinue?"), label,
+             App_NeedsInstall(a) ? TR("入れます", "installed") : TR("入れ直します", "reinstalled"));
     if (App_IsOutdated(a))
         snprintf(text + strlen(text), sizeof(text) - strlen(text), "%s",
                  TR("\n（SD カードの方が新しいバージョンです）", "\n(The SD card has a newer version.)"));
@@ -662,25 +696,32 @@ static void App_Reinstall(App *a)
         App_InstallBundled(a, true);
 }
 
-// 新しいバージョンのアプリをダウンロードして入れ直す。入れ直したら、新しいアプリを起動し直すので true
-static bool App_Update(App *a)
+// r の版のアプリをダウンロードして入れ直す（新しい版への更新も、前の版に戻すのも同じ）。
+// 入れ直したら、そのアプリを起動し直すので true
+static bool App_InstallRelease(App *a, const Release *r)
 {
-    const Release *latest = App_Latest(a);
-    const ReleaseAsset *asset;
+    const ReleaseAsset *asset = r != NULL ? Release_FindAsset(r, ASSET_CIA) : NULL;
     char text[320], label[40], ciaPath[160];
     int detail = 0, detail2 = 0;
     InstallResult res;
 
-    if (latest == NULL || !App_HasUpdate(a))
+    // v1.3 までは、Releases に更新アプリが無い
+    if (asset == NULL)
+    {
+        App_Message(a, TR("このバージョンは、このソフトからは入れられません。",
+                          "This version cannot be installed from this software."));
+        return false;
+    }
+
+    bool older = Version_Compare(r->tag, APP_VERSION) < 0;
+    App_VersionLabel(label, sizeof(label), r->tag);
+    snprintf(text, sizeof(text), older ? TR("boot.firm_Customize-Model を\n%s に戻します。\nよろしいですか？",
+                                            "boot.firm_Customize-Model will be downgraded to %s.\nContinue?") :
+                                         TR("boot.firm_Customize-Model を\n%s に更新します。\nよろしいですか？",
+                                            "boot.firm_Customize-Model will be updated to %s.\nContinue?"), label);
+    if (!App_Confirm(a, text, older ? TR("戻す", "Downgrade") : TR("更新する", "Update"), TR("やめる", "Cancel")))
         return false;
 
-    App_VersionLabel(label, sizeof(label), latest->tag);
-    snprintf(text, sizeof(text), TR("Luma3DS_New を %s に更新します。\nよろしいですか？",
-                                    "Luma3DS_New will be updated to %s.\nContinue?"), label);
-    if (!App_Confirm(a, text, TR("更新する", "Update"), TR("やめる", "Cancel")))
-        return false;
-
-    asset = Release_FindAsset(latest, ASSET_CIA);
     snprintf(ciaPath, sizeof(ciaPath), UPDATE_TMP_DIR "/%s", ASSET_CIA);
     App_LockSystem(true);
 
@@ -696,7 +737,7 @@ static bool App_Update(App *a)
     {
         progress.cancelled = NULL;
         a->ui.progressDone = a->ui.progressTotal = 0;
-        snprintf(a->ui.progressLabel, sizeof(a->ui.progressLabel), "%s", TR("ソフトを更新中", "Updating the software"));
+        snprintf(a->ui.progressLabel, sizeof(a->ui.progressLabel), "%s", TR("ソフトを入れ替え中", "Replacing the software"));
         App_SetOverlay(a, UI_OVERLAY_PROGRESS, MSG_UPDATING);
         res = Install_Cia(ciaPath, &progress, &detail);
     }
@@ -708,25 +749,51 @@ static bool App_Update(App *a)
     if (res != INSTALL_OK)
     {
         if (res == INSTALL_ERR_CANCELLED)
-            App_Message(a, TR("更新を中止しました。", "The update was cancelled."));
+            App_Message(a, TR("中止しました。", "Cancelled."));
         else
         {
             char reason[200];
             App_InstallErrorText(reason, sizeof(reason), res, detail, detail2);
-            snprintf(text, sizeof(text), "%s\n%s", TR("更新できませんでした。", "Could not update."), reason);
+            snprintf(text, sizeof(text), "%s\n%s", TR("入れられませんでした。", "Could not install."), reason);
             App_Message(a, text);
         }
-        App_Fetch(a);
+        // 更新内容を出している間は取り直さない（出している文が 更新.md の中を指している）
+        if (a->ui.view == UI_VIEW_MAIN)
+            App_Fetch(a);
         return false;
     }
 
-    // 新しいアプリが、中に入っている boot.firm を入れる
-    App_Message(a, TR("ソフトを更新しました。\n新しいソフトを起動して、Luma3DS_New を入れます。",
-                      "The software has been updated.\nThe new software will start and install Luma3DS_New."));
+    // 入れ替えたアプリが、中に入っている boot.firm を入れる（しるしを見て、ボタンを待たずに続ける）
+    Local_SetPending(r->tag);
+    App_Message(a, TR("ソフトを入れ替えました。\n入れ替えたソフトを起動して、\nboot.firm_Customize-Model を入れます。",
+                      "The software has been replaced.\nIt will now start and install boot.firm_Customize-Model."));
     u64 programId = 0;
     if (R_SUCCEEDED(APT_GetProgramID(&programId)))
         aptSetChainloader(programId, MEDIATYPE_SD);
     return true;
+}
+
+// 更新.md の index 番目の版を入れる。このアプリと同じ版なら、中に入っている boot.firm を入れ直す
+static bool App_InstallVersion(App *a, int index)
+{
+    const char *tag = a->sections[index].tag;
+
+    if (App_SameTag(tag, APP_VERSION))
+    {
+        App_Reinstall(a);
+        return false;
+    }
+    for (int i = 0; a->fetched && i < a->releases.count; ++i)
+        if (App_SameTag(a->releases.items[i].tag, tag))
+            return App_InstallRelease(a, &a->releases.items[i]);
+    return App_InstallRelease(a, NULL);
+}
+
+// 画面の色を切り替えて、SD カードに覚える（書けなくても、この回は切り替えた色で出す）
+static void App_ToggleTheme(App *a)
+{
+    a->ui.light = !a->ui.light;
+    Local_SetLightTheme(a->ui.light);
 }
 
 // ---------------------------------------------------------------- 本体
@@ -736,17 +803,15 @@ static bool App_Activate(App *a, int index)
 {
     switch (a->ui.items[index].id)
     {
-        case ITEM_UPDATE:
-            return App_Update(a);
-        case ITEM_NOTES:
-            App_ShowNotes(a);
-            break;
-        case ITEM_HISTORY:
-            App_HistoryLoop(a);
-            break;
         case ITEM_INSTALL:
+            if (App_HasUpdate(a))
+                return App_InstallRelease(a, App_Latest(a));
             App_Reinstall(a);
             break;
+        case ITEM_NOTES:
+            return App_ShowNotes(a);
+        case ITEM_HISTORY:
+            return App_HistoryLoop(a);
         case ITEM_SOURCE:
             App_SourceLoop(a);
             break;
@@ -766,9 +831,9 @@ int main(void)
 {
     App *a = &g_app;
     bool quit = false;
+    char pending[RELEASE_TAG_SIZE];
 
     romfsInit();
-    Lang_Init();
     Screen_Init();
     memset(a, 0, sizeof(*a));
     a->releases.latest = -1;
@@ -776,7 +841,12 @@ int main(void)
     a->ui.notesEmpty = TR("（更新内容はありません）", "(No release notes)");
     App_InitSource(a);
     Local_Read(&a->local);
-    App_InstallBundled(a, false);
+    a->ui.light = a->local.lightTheme;
+
+    // 起動しただけでは入れない。このアプリに入れ直した続きのときだけ、ボタンを待たずに入れる
+    Local_TakePending(pending, sizeof(pending));
+    if (App_SameTag(pending, APP_VERSION))
+        App_InstallBundled(a, false);
 
     if (Https_Init())
         App_Fetch(a);
@@ -800,6 +870,8 @@ int main(void)
             a->ui.selected = (a->ui.selected + 1) % a->ui.itemCount;
         if (down & KEY_UP)
             a->ui.selected = (a->ui.selected + a->ui.itemCount - 1) % a->ui.itemCount;
+        if (down & KEY_Y)
+            App_ToggleTheme(a);
 
         if (App_Touched(&x, &y))
         {
@@ -812,6 +884,8 @@ int main(void)
                 break;
             else if (hit == 1)
                 quit = App_Activate(a, a->ui.selected);
+            else if (hit == 2)
+                App_ToggleTheme(a);
         }
         else if (down & KEY_A)
             quit = App_Activate(a, a->ui.selected);
@@ -821,7 +895,6 @@ int main(void)
 
     Md_Free(&a->doc);
     free(a->changelog);
-    Release_FreeList(&a->releases);
     Https_Exit();
     Screen_Exit();
     romfsExit();

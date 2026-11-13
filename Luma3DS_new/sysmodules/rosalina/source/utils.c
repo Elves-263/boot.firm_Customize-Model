@@ -180,7 +180,7 @@ int calendarTimeToString(char *out, const CalendarTime *t)
 
     // 日本語では「2025/12/31(水) 23:59」（CALENDAR_TIME_STR_SIZE に収まる）
     static const char *const jpWeekdayStrs[7] = { "日", "月", "火", "水", "木", "金", "土" };
-    if (!Lang_IsEnglish())
+    if (TR(true, false))
         return sprintf(out, "%04ld/%02d/%02d(%s) %02d:%02d", yyyy, t->month, t->day, jpWeekdayStrs[t->weekday], t->hour, t->minute);
 
     return sprintf(

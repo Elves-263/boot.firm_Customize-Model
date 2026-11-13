@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -18,14 +18,14 @@
 
 #pragma once
 
-// GitHub の Releases から、版の一覧・更新内容・添付ファイルを取る
+// GitHub の Releases から、版の一覧と添付ファイルを取る（更新内容はリポジトリの 更新.md から取る）
 
 #include <stdbool.h>
 #include <stdint.h>
 #include "https.h"
 
 // リリースに添付するファイルの名前（build.bat の release フォルダと合わせる）。
-// boot.firm はこのアプリの中に入っているので、アプリを入れ直せば両方の版がそろう
+// boot.firm はこのアプリの中に入っているので、アプリを入れ直せばすべての版がそろう
 #define ASSET_CIA       "Luma3DS_New_Updater.cia"
 
 #define RELEASE_MAX         10      // 一覧に出す版の数（新しい順）
@@ -42,11 +42,8 @@ typedef struct ReleaseAsset
 typedef struct Release
 {
     char            tag[RELEASE_TAG_SIZE];
-    char            title[128];
-    char            date[11];       // 公開日（2026-11-02、UTC）
     char            published[21];  // 公開日時（2026-11-02T03:10:00Z）。同じ版どうしを並べるのに使う
     bool            prerelease;
-    char            *notes;         // 更新内容（malloc。無ければ空の文字列）
     ReleaseAsset    assets[RELEASE_ASSET_MAX];
     int             assetCount;
 } Release;
@@ -60,7 +57,8 @@ typedef struct ReleaseList
 
 // repo（所有者/名前）のリリースを取り、版の新しい順に並べる。応答が読めなければ HTTPS_ERR_PROTOCOL
 HttpsResult Release_FetchList(ReleaseList *list, const char *repo, int *detail);
-void Release_FreeList(ReleaseList *list);
+// 一覧を空にする
+void Release_ClearList(ReleaseList *list);
 
 const ReleaseAsset *Release_FindAsset(const Release *r, const char *name);
 

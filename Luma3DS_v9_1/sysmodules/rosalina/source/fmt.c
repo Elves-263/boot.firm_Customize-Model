@@ -57,7 +57,6 @@ This code is based on a file that contains the following:
 #include <3ds/types.h>
 #include "memory.h"
 #include "fmt.h"
-#include "menus/lang.h"
 
 #define ZEROPAD   (1<<0) //Pad with zero
 #define SIGN      (1<<1) //Unsigned/signed long
@@ -149,8 +148,6 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 {
     char *str;
 
-    // 書式と %s の文字列は、TR() の組なら今の言語のほうを使う
-    fmt = Lang_Str(fmt);
     for(str = buf; *fmt; fmt++)
     {
         if(*fmt != '%')
@@ -241,7 +238,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 
             case 's':
             {
-                const char *s = Lang_Str(va_arg(args, char *));
+                const char *s = va_arg(args, char *);
                 if(!s) s = "<NULL>";
                 u32 len = (precision != -1) ? strnlen(s, precision) : strlen(s);
                 if(!(flags & LEFT)) while((s32)len < fieldWidth--) *str++ = ' ';

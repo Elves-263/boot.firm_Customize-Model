@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@
 
 #include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -30,6 +29,8 @@
 // v1.4 より前は、新しい方の Luma を版の番号のフォルダに置いていた
 #define LEGACY_DIR      SD_ROOT "/3ds/luma/13.4"
 #define LEGACY_FIRM     LEGACY_DIR "/boot.firm"
+// v1.4 が、選んだ言語を書いていたファイル
+#define LEGACY_LANG_CFG SD_ROOT "/luma/lang.cfg"
 
 static const char *const g_paths[PART_COUNT] =
 {
@@ -124,34 +125,6 @@ static void Local_ReadText(const char *path, char *buf, size_t size)
     buf[n] = 0;
 }
 
-// "name=value" の行から value を取る
-static const char *Local_Value(const char *text, const char *name, char *out, size_t size)
-{
-    size_t len = strlen(name);
-
-    for (const char *line = text; *line != 0;)
-    {
-        const char *eol = strchr(line, '\n');
-        if (eol == NULL)
-            eol = line + strlen(line);
-
-        if (strncmp(line, name, len) == 0 && line[len] == '=')
-        {
-            size_t n = (size_t)(eol - line) - len - 1;
-            if (n > 0 && line[len + n] == '\r')
-                --n;
-            if (n >= size)
-                n = size - 1;
-            memcpy(out, line + len + 1, n);
-            out[n] = 0;
-            return out;
-        }
-        line = *eol != 0 ? eol + 1 : eol;
-    }
-    out[0] = 0;
-    return NULL;
-}
-
 static void Local_ReadRunning(LocalState *st)
 {
     char text[64], *nl;
@@ -171,33 +144,13 @@ static void Local_ReadRunning(LocalState *st)
     snprintf(st->runningLuma, sizeof(st->runningLuma), "%.*s", (int)sizeof(st->runningLuma) - 1, luma);
 }
 
-static void Local_ReadCheck(LocalState *st)
-{
-    char text[256], value[32];
-
-    Local_ReadText(UPDATE_CHECK_PATH, text, sizeof(text));
-    if (Local_Value(text, "result", st->checkResult, sizeof(st->checkResult)) == NULL)
-        return;
-
-    st->checkKnown = true;
-    if (Local_Value(text, "time", value, sizeof(value)) != NULL)
-        st->checkTime = strtoull(value, NULL, 10);
-    if (Local_Value(text, "code", value, sizeof(value)) != NULL)
-        st->checkCode = atoi(value);
-    Local_Value(text, "latest", st->checkLatest, sizeof(st->checkLatest));
-}
-
 void Local_Read(LocalState *st)
 {
     FILE *f;
 
     memset(st, 0, sizeof(*st));
 
-    for (int i = 0; i < PART_COUNT; ++i)
-        st->exists[i] = Local_Exists(g_paths[i]);
-
     Local_ReadRunning(st);
-    Local_ReadCheck(st);
 
     // SD:/boot.firm がどちらの版か。このアプリの boot.firm、/3ds/luma/<版>/boot.firm（版を切り替えたときに
     // 写したもの。v1.4 より前の 13.4 も見る）、Rosalina が書いた running.txt の順に見る。
@@ -217,18 +170,20 @@ void Local_Read(LocalState *st)
         st->rootLuma = "new";
 
     for (int i = 0; i < PART_COUNT; ++i)
-        st->same[i] = st->exists[i] && Local_SameFile(g_paths[i], Part_Bundle((Part)i, st));
+        st->same[i] = Local_Exists(g_paths[i]) && Local_SameFile(g_paths[i], Part_Bundle((Part)i, st));
 
     f = fopen(UPDATE_OFF_PATH, "rb");
     st->autoCheck = f == NULL;
     if (f != NULL)
         fclose(f);
+    st->lightTheme = Local_Exists(UPDATE_LIGHT_PATH);
 }
 
 void Local_RemoveLegacy(void)
 {
     remove(LEGACY_FIRM);
     rmdir(LEGACY_DIR);      // ほかのファイルがあれば消えない
+    remove(LEGACY_LANG_CFG);
 }
 
 bool Local_NeedsInstall(const LocalState *st)
@@ -239,15 +194,38 @@ bool Local_NeedsInstall(const LocalState *st)
     return false;
 }
 
-bool Local_SetAutoCheck(bool on)
+// path に text を書く。text が NULL ならファイルを消す
+static bool Local_WriteText(const char *path, const char *text)
 {
     FILE *f;
+    bool ok;
 
-    if (on)
-        return remove(UPDATE_OFF_PATH) == 0 || errno == ENOENT;
+    if (text == NULL)
+        return remove(path) == 0 || errno == ENOENT;
 
-    if (!Local_MakeParentDirs(UPDATE_OFF_PATH) || (f = fopen(UPDATE_OFF_PATH, "wb")) == NULL)
+    if (!Local_MakeParentDirs(path) || (f = fopen(path, "wb")) == NULL)
         return false;
-    fclose(f);
-    return true;
+    ok = fputs(text, f) >= 0;
+    return fclose(f) == 0 && ok;
+}
+
+bool Local_SetAutoCheck(bool on)
+{
+    return Local_WriteText(UPDATE_OFF_PATH, on ? NULL : "");
+}
+
+bool Local_SetLightTheme(bool on)
+{
+    return Local_WriteText(UPDATE_LIGHT_PATH, on ? "" : NULL);
+}
+
+bool Local_SetPending(const char *tag)
+{
+    return Local_WriteText(UPDATE_PENDING_PATH, tag);
+}
+
+void Local_TakePending(char *tag, size_t size)
+{
+    Local_ReadText(UPDATE_PENDING_PATH, tag, size);
+    remove(UPDATE_PENDING_PATH);
 }

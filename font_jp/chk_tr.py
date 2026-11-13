@@ -1,7 +1,7 @@
-# TR("日本語", "英語") の組で、書式指定（%d など）の並びが同じか確かめる。GCC は \0 より後ろ（英語）の書式を検査しないため
+# TR("日本語", "英語") の組で、書式指定（%d など）の並びが同じか確かめる。GCC が検査するのは、使うほうの言語だけなので
 #
 #   python3 font_jp/chk_tr.py Luma3DS_new/sysmodules/rosalina/source Luma3DS_v9_1/sysmodules/rosalina/source \
-#                             Luma3DS_new/arm9/source Luma3DS_v9_1/source updater/source
+#                             common/rosalina/source Luma3DS_new/arm9/source Luma3DS_v9_1/source updater/source
 import re, os, sys
 SPEC = re.compile(r'%[-+ #0]*(\*|\d+)?(\.(\*|\d+))?(hh|h|ll|l|z|j|t)?[diouxXcspfFeEgGaA%]')
 LIT = r'"(?:[^"\\\n]|\\.)*"'

@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ typedef enum InstallResult
 {
     INSTALL_OK = 0,
     INSTALL_ERR_NET,        // ダウンロードの失敗（detail は HttpsResult、detail2 はその詳細）
-    INSTALL_ERR_FORMAT,     // 大きさがリリースの添付ファイルと違う・中身が boot.firm の形でない
+    INSTALL_ERR_FORMAT,     // 大きさがリリースの添付ファイルと違う
     INSTALL_ERR_WRITE,      // SD カードに書けない
     INSTALL_ERR_CIA,        // .cia を入れられない（detail は Result）
     INSTALL_ERR_CANCELLED,
@@ -36,8 +36,8 @@ typedef enum InstallResult
 
 typedef struct InstallProgress
 {
-    // label の処理が done / total バイトまで進んだ（total が 0 なら大きさ不明）
-    void (*update)(void *ctx, const char *label, uint64_t done, uint64_t total);
+    // done / total バイトまで進んだ（total が 0 なら大きさ不明）
+    void (*update)(void *ctx, uint64_t done, uint64_t total);
     // 中止するなら true（ダウンロードの間だけ見る）
     bool (*cancelled)(void *ctx);
     void *ctx;
@@ -46,9 +46,6 @@ typedef struct InstallProgress
 // asset を path にダウンロードし、大きさがリリースの添付ファイルと同じか確かめる。違えば消す
 InstallResult Install_Download(const ReleaseAsset *asset, const char *path,
                                const InstallProgress *progress, int *detail, int *detail2);
-
-// ファイルの先頭が magic（4 バイト）か
-bool Install_HasMagic(const char *path, const char *magic);
 
 // staged を target に写す。target があれば UPDATE_BACKUP_DIR/backupName に残してから差し替え、
 // 写したものが staged と同じ中身であることを確かめる

@@ -1,4 +1,4 @@
-# Luma3DS_New の更新アプリ（makerom の設定）
+# boot.firm_Customize-Model の更新アプリ（makerom の設定）
 # UniqueId は Rosalina の update_check.h の UPDATER_TITLE_ID（0x000400000FF15A00）と合わせる
 
 BasicInfo:

@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 *   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Rosalina と同じく、黒い地に文字だけを並べる。見出しは Rosalina の題と同じ青、選んでいる行には > を付け、
+// Rosalina と同じく、地の色に文字だけを並べる。見出しは金色、選んでいる行には > を付け、
 // 下の端にボタンの説明（A: 決定 など）を出す。枠・影・角の丸い四角は使わない
 
 #include <stdio.h>
@@ -26,24 +26,41 @@
 #include "lang.h"
 #include "qrcodegen/qrcodegen.h"
 
-// ---------------------------------------------------------------- 色（Rosalina の draw.h に合わせる）
+// ---------------------------------------------------------------- 色（黒×金と白×金。UiState の light で選ぶ）
 
-#define C_BG        0x000000
-#define C_TEXT      0xFFFFFF
-#define C_DIM       0x9A9A9A
-#define C_TITLE     0x009AFF    // Rosalina の COLOR_TITLE
-#define C_GOOD      0x00E000
-#define C_BAD       0xFF2020
-#define C_YELLOW    0xFFFF40
-#define C_H3        0x7CC8FF
-#define C_CODE      0x9CFF9C
-#define C_CODE_BG   0x262626
-#define C_RULE      0x505050
+typedef struct UiColors
+{
+    uint32_t bg, text, dim;
+    uint32_t title;     // 題・見出し・選んでいる行の印・進み具合の帯
+    uint32_t good;      // 目立たせる行、ON、「最新」、うまくいった知らせ
+    uint32_t bad;
+    uint32_t mark;      // 太字、「使用中」、進んでいる途中の知らせ
+    uint32_t h3, code, codeBg, rule;
+} UiColors;
+
+static const UiColors g_colors[2] =
+{
+    { 0x000000, 0xF4F1E8, 0x968F7D, 0xD6B23E, 0xF4D678, 0xEB7864, 0xF4D678, 0xC8AC5A, 0xE8D9A8, 0x2A261C, 0x5C4D1E },
+    { 0xFAF7F0, 0x1E1B15, 0x7C7463, 0x967012, 0x7A5800, 0xBE3C28, 0x8A6A10, 0xA07E1E, 0x5A4A14, 0xF0E8D2, 0xD6BE78 },
+};
+static const UiColors *g_c = &g_colors[0];
+
+#define C_BG        (g_c->bg)
+#define C_TEXT      (g_c->text)
+#define C_DIM       (g_c->dim)
+#define C_TITLE     (g_c->title)
+#define C_GOOD      (g_c->good)
+#define C_BAD       (g_c->bad)
+#define C_YELLOW    (g_c->mark)
+#define C_H3        (g_c->h3)
+#define C_CODE      (g_c->code)
+#define C_CODE_BG   (g_c->codeBg)
+#define C_RULE      (g_c->rule)
 
 // ---------------------------------------------------------------- 並び（タッチの判定と共通）
 
 #define MARGIN      10
-#define LINE_H      19          // 文の行の間隔（FONT_BODY）
+#define LINE_H      19          // 文の行の間隔
 #define TITLE_Y     6
 #define BODY_Y      32          // 上の画面の、題の下
 #define ITEM_Y      10          // 下の画面の最初の行
@@ -59,12 +76,12 @@
 
 static int Ui_Text(ScreenId s, int x, int y, uint32_t color, const char *text)
 {
-    return Screen_DrawText(s, FONT_BODY, x, y, color, text, (size_t)-1);
+    return Screen_DrawText(s, x, y, color, text, (size_t)-1);
 }
 
 static int Ui_Width(const char *text)
 {
-    return Screen_TextWidth(FONT_BODY, text, (size_t)-1);
+    return Screen_TextWidth(text, (size_t)-1);
 }
 
 // 右寄せ
@@ -79,9 +96,9 @@ static int Ui_Wrapped(ScreenId s, int x, int y, int width, int maxY, uint32_t co
     size_t len;
     const char *next;
 
-    while ((next = Screen_WrapLine(FONT_BODY, text, width, &len)) != NULL && y + LINE_H <= maxY)
+    while ((next = Screen_WrapLine(text, width, &len)) != NULL && y + LINE_H <= maxY)
     {
-        Screen_DrawText(s, FONT_BODY, x, y, color, text, len);
+        Screen_DrawText(s, x, y, color, text, len);
         y += LINE_H;
         text = next;
     }
@@ -96,24 +113,73 @@ static void Ui_TopTitle(const char *title, const char *right)
         Ui_TextRight(SCREEN_TOP, SCREEN_TOP_WIDTH - MARGIN, TITLE_Y, C_DIM, right);
 }
 
-// 下の端のボタンの説明。「A: …」と「B: …」の位置はタッチの判定にも使う
-static void Ui_ButtonRects(const char *a, const char *b, int *ax, int *aw, int *bx, int *bw)
+// 下の端のボタンの説明は 3 つまで。順に「A: …」「B: …」と、「X: …」か「Y: …」（無ければ NULL）
+#define BUTTON_MAX  3
+
+// 説明の左端と幅。タッチの判定にも使う
+static void Ui_ButtonRects(const char *const labels[BUTTON_MAX], int x[BUTTON_MAX], int w[BUTTON_MAX])
 {
-    *ax = MARGIN;
-    *aw = a != NULL ? Ui_Width(a) : 0;
-    *bx = *ax + (*aw > 0 ? *aw + BUTTON_GAP : 0);
-    *bw = b != NULL ? Ui_Width(b) : 0;
+    int next = MARGIN;
+
+    for (int i = 0; i < BUTTON_MAX; ++i)
+    {
+        x[i] = next;
+        w[i] = labels[i] != NULL ? Ui_Width(labels[i]) : 0;
+        if (w[i] > 0)
+            next += w[i] + BUTTON_GAP;
+    }
 }
 
-static void Ui_Buttons(const char *a, const char *b)
+// いまの画面のボタンの説明。a と b は言葉を組み立てる場所
+static void Ui_ButtonLabels(const UiState *ui, char a[48], char b[48], const char *labels[BUTTON_MAX])
 {
-    int ax, aw, bx, bw;
+    labels[0] = labels[1] = labels[2] = NULL;
 
-    Ui_ButtonRects(a, b, &ax, &aw, &bx, &bw);
-    if (a != NULL)
-        Ui_Text(SCREEN_BOTTOM, ax, HELP_Y, C_TEXT, a);
-    if (b != NULL)
-        Ui_Text(SCREEN_BOTTOM, bx, HELP_Y, C_TEXT, b);
+    switch (ui->overlay)
+    {
+        case UI_OVERLAY_CONFIRM:
+            snprintf(a, 48, "A: %s", ui->yesLabel);
+            snprintf(b, 48, "B: %s", ui->noLabel);
+            labels[0] = a;
+            labels[1] = b;
+            break;
+        case UI_OVERLAY_MESSAGE:
+            snprintf(a, 48, "A: %s", ui->yesLabel);
+            labels[0] = a;
+            break;
+        case UI_OVERLAY_PROGRESS:
+            labels[1] = ui->cancellable ? TR("B: 中止", "B: Cancel") : NULL;
+            break;
+        default:
+            if (ui->view == UI_VIEW_MAIN)
+            {
+                labels[0] = TR("A: 決定", "A: Select");
+                labels[1] = TR("B: 終了", "B: Exit");
+                labels[2] = TR("Y: 色の切り替え", "Y: Colors");
+            }
+            else
+            {
+                if (ui->view == UI_VIEW_HISTORY)
+                    labels[0] = TR("A: 読む", "A: Read");
+                labels[1] = TR("B: 戻る", "B: Back");
+                if (ui->view != UI_VIEW_SOURCE)
+                    labels[2] = TR("X: この版を入れる", "X: Install this");
+            }
+            break;
+    }
+}
+
+static void Ui_DrawButtons(const UiState *ui)
+{
+    char a[48], b[48];
+    const char *labels[BUTTON_MAX];
+    int x[BUTTON_MAX], w[BUTTON_MAX];
+
+    Ui_ButtonLabels(ui, a, b, labels);
+    Ui_ButtonRects(labels, x, w);
+    for (int i = 0; i < BUTTON_MAX; ++i)
+        if (labels[i] != NULL)
+            Ui_Text(SCREEN_BOTTOM, x[i], HELP_Y, C_TEXT, labels[i]);
 }
 
 // ---------------------------------------------------------------- 更新内容
@@ -148,7 +214,7 @@ static void Ui_DrawRich(int x, int y, uint32_t base, const char *text, size_t le
             ++text;
 
         size_t n = (size_t)(text - seg);
-        int w = Screen_TextWidth(FONT_BODY, seg, n);
+        int w = Screen_TextWidth(seg, n);
         uint32_t color = base;
         if (style & UI_STYLE_CODE)
         {
@@ -160,7 +226,7 @@ static void Ui_DrawRich(int x, int y, uint32_t base, const char *text, size_t le
         else if (style & UI_STYLE_BOLD)
             color = C_YELLOW;
 
-        Screen_DrawText(SCREEN_TOP, FONT_BODY, x, y, color, seg, n);
+        Screen_DrawText(SCREEN_TOP, x, y, color, seg, n);
         if ((style & UI_STYLE_LINK) && n > 0)
             Screen_FillRect(SCREEN_TOP, x, y + LINE_H - 2, w, 1, C_TITLE, 255);
         x += w;
@@ -183,7 +249,7 @@ int Ui_LayoutNotes(const MdDoc *doc, UiNoteLine *lines, int max)
         {
             case MD_BULLET:
             case MD_NUMBER:
-                x = blk->depth * 16 + Screen_TextWidth(FONT_BODY, blk->marker, (size_t)-1) + 4;
+                x = blk->depth * 16 + Screen_TextWidth(blk->marker, (size_t)-1) + 4;
                 break;
             case MD_QUOTE:
                 x = 10 + blk->depth * 10;
@@ -206,7 +272,7 @@ int Ui_LayoutNotes(const MdDoc *doc, UiNoteLine *lines, int max)
         bool first = true;
         size_t len;
 
-        while (count < max && (next = Screen_WrapLine(FONT_BODY, p, NOTES_W - x, &len)) != NULL)
+        while (count < max && (next = Screen_WrapLine(p, NOTES_W - x, &len)) != NULL)
         {
             bool marked = first && (blk->kind == MD_BULLET || blk->kind == MD_NUMBER);
             lines[count++] = (UiNoteLine){ p, len, (uint8_t)blk->kind, style, (int16_t)x, marked ? blk->marker : NULL };
@@ -244,7 +310,7 @@ static void Ui_DrawNoteLine(const UiNoteLine *l, int y)
         case MD_BULLET:
         case MD_NUMBER:
             if (l->marker != NULL)
-                Screen_DrawText(SCREEN_TOP, FONT_BODY, x - Screen_TextWidth(FONT_BODY, l->marker, (size_t)-1) - 4, y,
+                Screen_DrawText(SCREEN_TOP, x - Screen_TextWidth(l->marker, (size_t)-1) - 4, y,
                                 C_DIM, l->marker, (size_t)-1);
             break;
         default:
@@ -303,7 +369,7 @@ static void Ui_DrawMainTop(const UiState *ui)
     int y = BODY_Y;
     char status[80];
 
-    Ui_TopTitle(TR("Luma3DS_New 更新", "Luma3DS_New Updater"), ui->appVersion);
+    Ui_TopTitle(TR("boot.firm_Customize-Model 更新", "boot.firm_Customize-Model Updater"), ui->appVersion);
 
     for (int i = 0; i < 2; ++i, y += LINE_H)
     {
@@ -338,7 +404,6 @@ static void Ui_DrawMainBottom(const UiState *ui)
             Ui_TextRight(SCREEN_BOTTOM, SCREEN_BOTTOM_WIDTH - MARGIN, y,
                          strcmp(it->value, "ON") == 0 ? C_GOOD : C_DIM, it->value);
     }
-    Ui_Buttons(TR("A: 決定", "A: Select"), TR("B: 終了", "B: Exit"));
 }
 
 // ---------------------------------------------------------------- 版の一覧
@@ -373,18 +438,12 @@ static void Ui_DrawHistoryBottom(const UiState *ui)
         Ui_TextRight(SCREEN_BOTTOM, SCREEN_BOTTOM_WIDTH - MARGIN, ITEM_Y + (rows - 1) * ITEM_H, C_TITLE, "v");
     if (ui->versionCount == 0)
         Ui_Text(SCREEN_BOTTOM, LABEL_X, ITEM_Y, C_DIM, ui->notesEmpty != NULL ? ui->notesEmpty : "");
-
-    Ui_Buttons(TR("A: 読む", "A: Read"), TR("B: 戻る", "B: Back"));
 }
 
 static void Ui_DrawNotesBottom(void)
 {
-    int y = ITEM_Y;
-
-    y = Ui_Wrapped(SCREEN_BOTTOM, MARGIN, y, SCREEN_BOTTOM_WIDTH - 2 * MARGIN, HELP_Y, C_DIM,
-                   TR("上下: 1 行ずつ送る\n左右・L・R: 1 画面ずつ送る", "Up/Down: scroll by line\nLeft/Right, L/R: scroll by page"));
-    (void)y;
-    Ui_Buttons(NULL, TR("B: 戻る", "B: Back"));
+    Ui_Wrapped(SCREEN_BOTTOM, MARGIN, ITEM_Y, SCREEN_BOTTOM_WIDTH - 2 * MARGIN, HELP_Y, C_DIM,
+               TR("上下: 1 行ずつ送る\n左右・L・R: 1 画面ずつ送る", "Up/Down: scroll by line\nLeft/Right, L/R: scroll by page"));
 }
 
 // ---------------------------------------------------------------- ソースコード
@@ -395,8 +454,8 @@ static void Ui_DrawSourceTop(const UiState *ui)
 
     Ui_TopTitle(TR("ソースコード", "Source code"), NULL);
     y = Ui_Wrapped(SCREEN_TOP, MARGIN, y, NOTES_W, SCREEN_HEIGHT, C_TEXT,
-                   TR("Luma3DS_New は GNU GPL v3 のもとで公開しています。ソースコードは次の場所で入手できます。",
-                      "Luma3DS_New is released under the GNU GPL v3. The source code is available at:"));
+                   TR("boot.firm_Customize-Model は GNU GPL v3 のもとで公開しています。ソースコードは次の場所で入手できます。",
+                      "boot.firm_Customize-Model is released under the GNU GPL v3. The source code is available at:"));
     y += LINE_H / 2;
     if (ui->sourceUrl != NULL)
     {
@@ -431,7 +490,6 @@ static void Ui_DrawSourceBottom(const UiState *ui)
                 if (qrcodegen_getModule(ui->qr, x, y))
                     Screen_FillRect(SCREEN_BOTTOM, ox + (x + 4) * scale, oy + (y + 4) * scale, scale, scale, 0x000000, 255);
     }
-    Ui_Buttons(NULL, TR("B: 戻る", "B: Back"));
 }
 
 // ---------------------------------------------------------------- 重ねるもの（下の画面を置き換える）
@@ -443,58 +501,36 @@ static void Ui_DrawOverlay(const UiState *ui)
     Screen_FillRect(SCREEN_BOTTOM, 0, 0, SCREEN_BOTTOM_WIDTH, SCREEN_HEIGHT, C_BG, 255);
     y = Ui_Wrapped(SCREEN_BOTTOM, MARGIN, y, w, HELP_Y, C_TEXT, ui->overlayText);
 
-    switch (ui->overlay)
-    {
-        case UI_OVERLAY_PROGRESS:
-        {
-            char line[96];
-            int barY = y + 4 + LINE_H + 4, barW = w;    // 「ダウンロード中 45%」の下
+    if (ui->overlay != UI_OVERLAY_PROGRESS)
+        return;
 
-            if (ui->progressTotal > 0)
-            {
-                uint64_t done = ui->progressDone < ui->progressTotal ? ui->progressDone : ui->progressTotal;
-                snprintf(line, sizeof(line), "%s  %d%%", ui->progressLabel, (int)(done * 100 / ui->progressTotal));
-                Ui_Text(SCREEN_BOTTOM, MARGIN, y + 4, C_YELLOW, line);
-                Screen_FillRect(SCREEN_BOTTOM, MARGIN, barY, (int)((uint64_t)barW * done / ui->progressTotal), 6, C_TEXT, 255);
-            }
-            else
-            {
-                // 大きさが分からないときは、短い帯を左から右へ動かす
-                int seg = barW / 5, pos = (int)(ui->frame * 4 % (uint32_t)(barW + seg)) - seg;
-                int x0 = pos < 0 ? 0 : pos, x1 = pos + seg > barW ? barW : pos + seg;
-                Ui_Text(SCREEN_BOTTOM, MARGIN, y + 4, C_YELLOW, ui->progressLabel);
-                if (x1 > x0)
-                    Screen_FillRect(SCREEN_BOTTOM, MARGIN + x0, barY, x1 - x0, 6, C_TEXT, 255);
-            }
-            Screen_FillRect(SCREEN_BOTTOM, MARGIN, barY + 7, barW, 1, C_RULE, 255);
-            if (ui->cancellable)
-                Ui_Buttons(NULL, TR("B: 中止", "B: Cancel"));
-            break;
-        }
-        case UI_OVERLAY_CONFIRM:
-        {
-            char a[48], b[48];
-            snprintf(a, sizeof(a), "A: %s", ui->yesLabel);
-            snprintf(b, sizeof(b), "B: %s", ui->noLabel);
-            Ui_Buttons(a, b);
-            break;
-        }
-        case UI_OVERLAY_MESSAGE:
-        {
-            char a[48];
-            snprintf(a, sizeof(a), "A: %s", ui->yesLabel);
-            Ui_Buttons(a, NULL);
-            break;
-        }
-        default:
-            break;
+    char line[96];
+    int barY = y + 4 + LINE_H + 4, barW = w;    // 「ダウンロード中 45%」の下
+
+    if (ui->progressTotal > 0)
+    {
+        uint64_t done = ui->progressDone < ui->progressTotal ? ui->progressDone : ui->progressTotal;
+        snprintf(line, sizeof(line), "%s  %d%%", ui->progressLabel, (int)(done * 100 / ui->progressTotal));
+        Ui_Text(SCREEN_BOTTOM, MARGIN, y + 4, C_YELLOW, line);
+        Screen_FillRect(SCREEN_BOTTOM, MARGIN, barY, (int)((uint64_t)barW * done / ui->progressTotal), 6, C_TITLE, 255);
     }
+    else
+    {
+        // 大きさが分からないときは、短い帯を左から右へ動かす
+        int seg = barW / 5, pos = (int)(ui->frame * 4 % (uint32_t)(barW + seg)) - seg;
+        int x0 = pos < 0 ? 0 : pos, x1 = pos + seg > barW ? barW : pos + seg;
+        Ui_Text(SCREEN_BOTTOM, MARGIN, y + 4, C_YELLOW, ui->progressLabel);
+        if (x1 > x0)
+            Screen_FillRect(SCREEN_BOTTOM, MARGIN + x0, barY, x1 - x0, 6, C_TITLE, 255);
+    }
+    Screen_FillRect(SCREEN_BOTTOM, MARGIN, barY + 7, barW, 1, C_RULE, 255);
 }
 
 // ---------------------------------------------------------------- 全体
 
 void Ui_Draw(const UiState *ui)
 {
+    g_c = &g_colors[ui->light];
     Screen_Begin();
     Screen_FillRect(SCREEN_TOP, 0, 0, SCREEN_TOP_WIDTH, SCREEN_HEIGHT, C_BG, 255);
     Screen_FillRect(SCREEN_BOTTOM, 0, 0, SCREEN_BOTTOM_WIDTH, SCREEN_HEIGHT, C_BG, 255);
@@ -521,6 +557,7 @@ void Ui_Draw(const UiState *ui)
 
     if (ui->overlay != UI_OVERLAY_NONE)
         Ui_DrawOverlay(ui);
+    Ui_DrawButtons(ui);
     Screen_End();
 }
 
@@ -544,47 +581,17 @@ int Ui_HitVersion(const UiState *ui, int x, int y)
 
 int Ui_HitButtons(const UiState *ui, int x, int y)
 {
+    static const int ids[BUTTON_MAX] = { 1, 0, 2 };
     char a[48], b[48];
-    const char *pa = NULL, *pb = NULL;
-    int ax, aw, bx, bw;
+    const char *labels[BUTTON_MAX];
+    int bx[BUTTON_MAX], bw[BUTTON_MAX];
 
-    switch (ui->overlay)
-    {
-        case UI_OVERLAY_CONFIRM:
-            snprintf(a, sizeof(a), "A: %s", ui->yesLabel);
-            snprintf(b, sizeof(b), "B: %s", ui->noLabel);
-            pa = a;
-            pb = b;
-            break;
-        case UI_OVERLAY_MESSAGE:
-            snprintf(a, sizeof(a), "A: %s", ui->yesLabel);
-            pa = a;
-            break;
-        case UI_OVERLAY_PROGRESS:
-            pb = ui->cancellable ? TR("B: 中止", "B: Cancel") : NULL;
-            break;
-        default:
-            if (ui->view == UI_VIEW_MAIN)
-            {
-                pa = TR("A: 決定", "A: Select");
-                pb = TR("B: 終了", "B: Exit");
-            }
-            else if (ui->view == UI_VIEW_HISTORY)
-            {
-                pa = TR("A: 読む", "A: Read");
-                pb = TR("B: 戻る", "B: Back");
-            }
-            else
-                pb = TR("B: 戻る", "B: Back");
-            break;
-    }
-
-    Ui_ButtonRects(pa, pb, &ax, &aw, &bx, &bw);
+    Ui_ButtonLabels(ui, a, b, labels);
+    Ui_ButtonRects(labels, bx, bw);
     if (y < HELP_Y - 4 || y >= SCREEN_HEIGHT)
         return -1;
-    if (pa != NULL && x >= ax - 4 && x < ax + aw + 4)
-        return 1;
-    if (pb != NULL && x >= bx - 4 && x < bx + bw + 4)
-        return 0;
+    for (int i = 0; i < BUTTON_MAX; ++i)
+        if (labels[i] != NULL && x >= bx[i] - 4 && x < bx[i] + bw[i] + 4)
+            return ids[i];
     return -1;
 }

@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -165,7 +165,7 @@ static char *Md_Inline(char *out, const char *s, const char *e)
         else if (c == '*' && s + 1 < e && s[1] != ' ')
         {
             // *斜体* は飾りを外すだけ（斜めの字は無い）。閉じる * が無ければそのまま。
-            // _斜体_ は Luma3DS_New のような名前を壊すので扱わない
+            // _斜体_ は boot.firm_Customize-Model のような名前を壊すので扱わない
             const char *close = Md_Find(s + 1, e, c);
             if (close == NULL || close[-1] == ' ')
                 *out++ = *s++;

@@ -40,7 +40,6 @@
 #include "i2c.h"
 #include "fmt.h"
 #include "fatfs/sdmmc/sdmmc.h"
-#include "lang.h"
 
 extern u8 __itcm_start__[], __itcm_lma__[], __itcm_bss_start__[], __itcm_end__[];
 
@@ -181,9 +180,6 @@ void main(int argc, char **argv, u32 magicWord)
     }
 
     detectAndProcessExceptionDumps();
-
-    // 設定画面・PIN の画面の言語（/luma/lang.cfg）
-    initLanguage();
 
     //Attempt to read the configuration file
     needConfig = readConfig() ? MODIFY_CONFIGURATION : CREATE_CONFIGURATION;

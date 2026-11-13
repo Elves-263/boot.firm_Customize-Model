@@ -4,7 +4,8 @@
 #   python3 tools/mkassets.py
 #
 # icon.png（48x48）、banner.png（256x128）、banner.wav（無音）、icon.smdh を作る。
-# 絵の字は Rosalina と同じ 10 ドットの字（source/font.h と ../font_jp/font_jp.bin）を拡大して描く。
+# 色は黒い地に白と金。
+# 絵の字は Rosalina と同じ 10 ドットの字（Rosalina の font.h と ../font_jp/font_jp.bin）を拡大して描く。
 # Pillow が要る。名前を変えたら作り直す。
 
 import os
@@ -18,19 +19,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 # SMDH の名前。日本語の本体では日本語、それ以外の言語では英語にする
-SHORT_TITLE = 'Luma3DS_New 更新'
-LONG_TITLE = 'Luma3DS_New の更新アプリ'
-SHORT_TITLE_EN = 'Luma3DS_New Updater'
-LONG_TITLE_EN = 'Luma3DS_New updater'
+SHORT_TITLE = 'boot.firm_Customize-Model 更新'
+LONG_TITLE = 'boot.firm_Customize-Model の更新アプリ'
+SHORT_TITLE_EN = 'boot.firm_Customize-Model Updater'
+LONG_TITLE_EN = 'boot.firm_Customize-Model updater'
 PUBLISHER = 'ELVES'
 
-BACK = (20, 34, 60)
-ACCENT = (51, 170, 255)
-WHITE = (255, 255, 255)
+BACK = (10, 10, 12)
+ACCENT = (214, 178, 62)     # 金
+WHITE = (244, 241, 232)
+DIM = (150, 143, 125)
+PANEL = (38, 35, 28)
 
 
 def load_fonts():
-    src = open(os.path.join(ROOT, 'source', 'font.h'), encoding='utf-8').read()
+    src = open(os.path.join(ROOT, '..', 'Luma3DS_new', 'sysmodules', 'rosalina', 'include', 'font.h'), encoding='utf-8').read()
     ascii_font = [int(x, 16) for x in re.findall(r'0x([0-9A-Fa-f]{2})', src.split('font[] = {')[1])]
     data = open(os.path.join(ROOT, '..', 'font_jp', 'font_jp.bin'), 'rb').read()
     table, pages = struct.unpack_from('<II', data, 0x0C)
@@ -69,7 +72,7 @@ def text_width(text, scale, glyph):
 def make_icon(path):
     img = Image.new('RGB', (48, 48), BACK)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle((2, 2, 45, 45), radius=8, fill=(30, 60, 105))
+    d.rounded_rectangle((2, 2, 45, 45), radius=8, fill=PANEL)
     # 下向きの矢印と受け皿（ダウンロード・更新の印）
     d.rectangle((20, 8, 27, 24), fill=WHITE)
     d.polygon([(12, 22), (35, 22), (23.5, 34)], fill=WHITE)
@@ -81,10 +84,9 @@ def make_icon(path):
 def make_banner(path, glyph):
     img = Image.new('RGB', (256, 128), BACK)
     d = ImageDraw.Draw(img)
-    d.rectangle((0, 92, 255, 95), fill=ACCENT)
-    title, sub = 'Luma3DS_New', '更新アプリ'
-    draw_text(img, (256 - text_width(title, 3, glyph)) // 2, 22, title, WHITE, 3, glyph)
-    draw_text(img, (256 - text_width(sub, 2, glyph)) // 2, 62, sub, ACCENT, 2, glyph)
+    d.rectangle((0, 104, 255, 107), fill=ACCENT)
+    for y, text, color, scale in ((12, 'boot.firm', WHITE, 3), (48, 'Customize-Model', ACCENT, 2), (76, '更新アプリ', DIM, 2)):
+        draw_text(img, (256 - text_width(text, scale, glyph)) // 2, y, text, color, scale, glyph)
     img.save(path)
 
 

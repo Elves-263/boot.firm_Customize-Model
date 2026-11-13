@@ -1,7 +1,7 @@
 :<<"::BASH_BEGIN"
 @echo off
 setlocal EnableExtensions
-title Luma3DS_New build
+title boot.firm_Customize-Model build
 cd /d "%~dp0"
 
 set "RC=0"
@@ -28,7 +28,7 @@ echo.
 if "%~1"=="" pause
 exit /b %RC%
 ::BASH_BEGIN
-# Luma3DS_New（新しい方の Luma と v9.1）のビルド
+# boot.firm_Customize-Model（新しい方の Luma と v9.1）のビルド
 #
 # 新しい方の Luma は Luma3DS_new フォルダにある。上流の版（v13.5 など）は Luma3DS_new/UPSTREAM_VERSION の
 # 1 か所に書いてあり、画面に出す版・Makefile・このファイルはそこから取る。上流の新しい版に上げるときは
@@ -44,11 +44,12 @@ exit /b %RC%
 #   build.bat 3    v9.1 だけビルド
 #   build.bat 4    新しい方と v9.1 と更新アプリを make clean
 #   build.bat 5    更新アプリ（.cia）だけビルド（新しい方と v9.1 をビルドしたあとで）
+#   build.bat 6    配布用にクリーン（ビルドで出来たものをすべて消して、ソースだけにする）
 #
 # boot.firm には、FIRM の後ろにフォント（font_jp/font_jp.bin）を付ける。
 # 1 では更新アプリも作る。更新アプリの中には両方の版の boot.firm が入る。
 # GitHub の Releases に添付するファイル（更新アプリの .cia）は release フォルダに置く（updater/README.md を参照）。
-# Linux などでは bash build.bat [1-5 または all|new|v9.1|clean|updater] で同じことができる。
+# Linux などでは bash build.bat [1-6 または all|new|v9.1|clean|updater|distclean] で同じことができる。
 # ビルドは毎回 make clean してから make する。前の版が失敗したら次には進まない。
 #   STRICT=1 bash build.bat 1          全警告をエラーにして棚卸し
 #   K11_MAX=0x10000 bash build.bat 1   k11_extension が指定サイズを超えたら失敗させる
@@ -96,6 +97,7 @@ if [ -z "$SEL" ]; then
   echo "  3: v9.1 だけビルド"
   echo "  4: v$NEW_VER と v9.1 と更新アプリを make clean"
   echo "  5: 更新アプリだけビルド"
+  echo "  6: 配布用にクリーン（ソースだけにする）"
   echo
   read -r -p "番号を入力して Enter（Enter だけなら 1）: " SEL || true
   echo
@@ -106,7 +108,8 @@ case "${SEL:-1}" in
   3|v9.1)  MODE=v9.1 ;;
   4|clean) MODE=clean ;;
   5|updater) MODE=updater ;;
-  *) echo "!! 1 から 5 の番号を指定してください（指定値: $SEL）" >&2; exit 1 ;;
+  6|distclean) MODE=distclean ;;
+  *) echo "!! 1 から 6 の番号を指定してください（指定値: $SEL）" >&2; exit 1 ;;
 esac
 
 : "${DEVKITPRO:?DEVKITPRO が設定されていません}"
@@ -154,24 +157,42 @@ for dir in "$NEW_DIR" "$V91_DIR" "$UPD_DIR"; do
   fi
 done
 
-# 改変版の版（v1.4 など）は Rosalina の menu.h にある。更新アプリの版とリリースのタグもこれに合わせる
-tag_of() { sed -n 's/^#define FORK_PACKAGE_TAG *"\(.*\)".*/\1/p' "$1/sysmodules/rosalina/include/menu.h"; }
-PACKAGE_TAG="$(tag_of "$NEW_DIR")"
-if [ -z "$PACKAGE_TAG" ] || [ "$PACKAGE_TAG" != "$(tag_of "$V91_DIR")" ]; then
-  echo "!! Luma3DS_new と Luma3DS_v9_1 の sysmodules/rosalina/include/menu.h の FORK_PACKAGE_TAG が違います。同じ版にしてください。" >&2
+# 両方の版の Rosalina が共通に使うコード（common/）
+COMMON_DIR="$ROOT/common"
+FORK_H="$COMMON_DIR/rosalina/include/fork.h"
+if [ ! -f "$FORK_H" ]; then
+  echo "!! common/rosalina/include/fork.h が見つかりません。build.bat と同じ場所に common フォルダを置いてください。" >&2
+  exit 1
+fi
+
+# 改変版の版（v1.4 など）は fork.h にある。更新アプリの版とリリースのタグもこれに合わせる
+PACKAGE_TAG="$(sed -n 's/^#define FORK_PACKAGE_TAG *"\(.*\)".*/\1/p' "$FORK_H")"
+if [ -z "$PACKAGE_TAG" ]; then
+  echo "!! common/rosalina/include/fork.h に FORK_PACKAGE_TAG がありません。" >&2
   exit 1
 fi
 
 STAGE="準備"
 trap 'echo; echo "!! ${STAGE}に失敗しました。詳細は build.log を確認してください。" >&2' ERR
 
-if [ "$MODE" = clean ]; then
+if [ "$MODE" = clean ] || [ "$MODE" = distclean ]; then
+  # 上流の版を上げている途中（tools/upgrade_upstream.sh）の作業は消さない
+  if [ "$MODE" = distclean ] && [ -d "$ROOT/.upgrade" ]; then
+    echo "!! 上流の版を上げる作業（.upgrade）が残っています。tools/upgrade_upstream.sh の --finish か --abort を先に実行してください。" >&2
+    trap - ERR
+    exit 1
+  fi
   STAGE="make clean"
   printf 'v%s と v9.1 と更新アプリを make clean 中...' "$NEW_VER"
   for dir in "$NEW_DIR" "$V91_DIR" "$UPD_DIR"; do
     make -C "$dir" clean >> "$LOG" 2>&1
   done
   echo " 完了"
+  if [ "$MODE" = distclean ]; then
+    # .gitignore に書いてあるもの（libctru、フォントを付けた boot.firm、配るファイル、ログ）も消す
+    rm -rf "$CACHE" "$FIRMS" "$DIST" "$REL" "$LOG"
+    echo "ビルドで出来たものをすべて消しました。このフォルダをそのまま配れます。"
+  fi
   trap - ERR
   exit 0
 fi
@@ -276,7 +297,7 @@ build_version() {
   STAGE="$label のビルド"
   printf '%s をビルド中... 0%%' "$label"
   fetch_libctru "$ver"
-  total=$(( LIBCTRU_FILES + $(count_sources "$dir") ))
+  total=$(( LIBCTRU_FILES + $(count_sources "$dir" "$COMMON_DIR/rosalina" "$COMMON_DIR/bearssl") ))
   {
     trap - ERR
     build_libctru "$ver"

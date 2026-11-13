@@ -17,7 +17,7 @@
 
 #define PERS_USER_FILE_MAGIC 0x53524550 // PERS
 
-static const char *g_title = "プラグインローダー";
+static const char *g_title = TR("プラグインローダー", "Plugin Loader");
 PluginLoaderContext PluginLoaderCtx;
 extern u32 g_blockMenuOpen;
 

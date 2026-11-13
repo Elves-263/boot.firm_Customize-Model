@@ -482,6 +482,61 @@ static u32 menuScrollOffset;
 
 u8 g_menuWorkBuf[MENU_WORK_BUF_SIZE];
 
+static u64 menuTagStart;    // メニューを開いた時刻（版の表示を流す位置を決める）
+
+// タイトルの右に「[v動作中の Luma / 改変版の版]」（セーフモードのときは赤で、後ろに「セーフ」）を出す。
+// その右は日時か IP アドレスの表示に使うので、収まらないときは 1 点ずつ左へ流し、true を返す。
+// 流す幅が 6 桁も無ければ出さない
+static bool menuDrawTag(const Menu *menu)
+{
+    const char *text = g_safeMode ? FORK_TITLE_TAG TR(" セーフ", " SAFE") : FORK_TITLE_TAG;
+    char loop[2 * sizeof(FORK_TITLE_TAG TR(" セーフ", " SAFE")) + 4];
+    const u32 endCol = (SCREEN_BOT_WIDTH - 20) / SPACING_X - CALENDAR_TIME_STR_SIZE;
+    const u32 color = g_safeMode ? COLOR_RED : COLOR_TITLE;
+    u32 tagCol = Draw_TextColumns(menu->title) + 1;
+
+    if (tagCol < 15)
+        tagCol = 15;
+    if (tagCol + 6 > endCol)
+        return false;
+
+    u32 x = 10 + tagCol * SPACING_X;
+    u32 width = (endCol - tagCol) * SPACING_X;
+    u32 lap = (Draw_TextColumns(text) + 4) * SPACING_X;     // 1 周の点の数（4 桁あけて繰り返す）
+
+    if (lap - 4 * SPACING_X <= width)
+    {
+        Draw_DrawString(x, 10, color, text);
+        return false;
+    }
+
+    // 1 秒に 30 点（5 桁）流し、先頭では 1 秒止める
+    u32 t = (u32)(osGetTime() - menuTagStart) % (1000 + lap * 1000 / 30);
+    u32 shift = t < 1000 ? 0 : (t - 1000) * 30 / 1000;
+
+    sprintf(loop, "%s    %s", text, text);
+    Draw_DrawStringClipped((s32)x - (s32)shift, 10, color, loop, x - 1, x - 1 + width);
+    return true;
+}
+
+// 入力を 1 秒まで待つ。版の表示を流しているあいだは、待ちながら動かす
+static u32 menuWaitInput(const Menu *menu)
+{
+    u64 start = osGetTime();
+    u32 pressed;
+    bool flows = true;
+
+    while((pressed = waitInputWithTimeout(flows ? 16 : 1000)) == 0 && flows && !menuShouldExit && osGetTime() - start < 1000)
+    {
+        Draw_Lock();
+        flows = menuDrawTag(menu);
+        Draw_FlushFramebuffer();
+        Draw_Unlock();
+    }
+
+    return pressed;
+}
+
 static void menuDraw(Menu *menu, u32 selected)
 {
     char versionString[16];
@@ -505,30 +560,8 @@ static void menuDraw(Menu *menu, u32 selected)
     else
         sprintf(versionString, "v%lu.%lu.%lu", GET_VERSION_MAJOR(version), GET_VERSION_MINOR(version), GET_VERSION_REVISION(version));
 
-    // タイトルの右に「[v動作中の Luma / 改変版の版]」と「セーフ」（セーフモードのとき）を並べる。
-    // 右上の 15 桁分は IP アドレスの表示に使うため、収まらないときは「[v動作中の Luma]」にし、
-    // それでも収まらなければ省く（「セーフ」は残す）
-    static const char *const tags[] = { FORK_TITLE_TAG, FORK_TITLE_TAG_SHORT, "" };
-    static const char safeTag[] = TR("セーフ", "SAFE");
-    const u32 endCol = (SCREEN_BOT_WIDTH - 20) / SPACING_X - 15;
-    const u32 safeCols = g_safeMode ? Draw_TextColumns(safeTag) : 0;
-    const char *tag = "";
-    u32 tagCol = Draw_TextColumns(menu->title) + 1;
-    if (tagCol < 15)
-        tagCol = 15;
-    for (u32 i = 0; i < sizeof(tags) / sizeof(tags[0]); ++i)
-    {
-        u32 len = strlen(tags[i]);
-        if (tagCol + len + (safeCols != 0 && len != 0 ? 1 : 0) + safeCols <= endCol)
-        {
-            tag = tags[i];
-            break;
-        }
-    }
     Draw_DrawString(10, 10, COLOR_TITLE, menu->title);
-    Draw_DrawString(10 + tagCol * SPACING_X, 10, COLOR_TITLE, tag);
-    if (g_safeMode)
-        Draw_DrawString(10 + (tagCol + strlen(tag) + (tag[0] != 0 ? 1 : 0)) * SPACING_X, 10, COLOR_RED, safeTag);
+    menuDrawTag(menu);
     u32 numItems = menuCountItems(menu);
 
     u32 nbVisible = 0;
@@ -679,6 +712,8 @@ void menuShow(Menu *root)
 
     menuCloseRequested = false;
 
+    menuTagStart = osGetTime();
+
     Draw_Lock();
     Draw_ClearFramebuffer();
     Draw_FlushFramebuffer();
@@ -690,7 +725,7 @@ void menuShow(Menu *root)
 
     do
     {
-        u32 pressed = waitInputWithTimeout(1000);
+        u32 pressed = menuWaitInput(currentMenu);
         numItems = menuCountItems(currentMenu);
 
         if(!menuComboReleased && (scanHeldKeys() & menuCombo) != menuCombo)

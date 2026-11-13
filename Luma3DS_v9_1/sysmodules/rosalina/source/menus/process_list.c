@@ -62,7 +62,7 @@ static inline int ProcessListMenu_FormatInfoLine(char *out, const ProcessInfo *i
     memset(commentBuf, ' ', 23);
 
     if(info->isZombie)
-        strcpy(commentBuf, Lang_Str(TR("ゾンビ", "Zombie")));
+        strcpy(commentBuf, TR("ゾンビ", "Zombie"));
 
     else if(gdbServer.super.running && id < MAX_DEBUG)
     {
@@ -388,19 +388,19 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
                 switch(menuMode)
                 {
                     case MENU_MODE_NORMAL:
-                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 5 : 9), instructionsY, COLOR_GREEN, TR("移動", "move"));
+                        Draw_DrawString(10 + SPACING_X * TR(9, 5), instructionsY, COLOR_GREEN, TR("移動", "move"));
                         break;
                     case MENU_MODE_GOTO:
-                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 13 : 17), instructionsY, COLOR_GREEN, TR("ジャンプ", "jump"));
+                        Draw_DrawString(10 + SPACING_X * TR(17, 13), instructionsY, COLOR_GREEN, TR("ジャンプ", "jump"));
                         break;
                     case MENU_MODE_SEARCH:
-                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 21 : 29), instructionsY, COLOR_GREEN, TR("検索", "search"));
+                        Draw_DrawString(10 + SPACING_X * TR(29, 21), instructionsY, COLOR_GREEN, TR("検索", "search"));
                         break;
                     default: break;
                 }
 
                 if(editing)
-                    Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 31 : 37), instructionsY, COLOR_RED, TR("編集", "edit"));
+                    Draw_DrawString(10 + SPACING_X * TR(37, 31), instructionsY, COLOR_RED, TR("編集", "edit"));
                 // ------------------------------------------
 
                 // Location
@@ -410,9 +410,9 @@ static void ProcessListMenu_MemoryViewer(const ProcessInfo *info)
                     viewerY += SPACING_Y;
                     Draw_DrawString(10, infoY, COLOR_WHITE, TR("L/R: ヒープとコードを切り替え", "L/R: switch heap/code"));
                     if((u32)menus[MENU_MODE_NORMAL].buf == heapDestAddress)
-                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 12 : 5), infoY, COLOR_GREEN, TR("ヒープ", "heap"));
+                        Draw_DrawString(10 + SPACING_X * TR(5, 12), infoY, COLOR_GREEN, TR("ヒープ", "heap"));
                     if((u32)menus[MENU_MODE_NORMAL].buf == codeDestAddress)
-                        Draw_DrawString(10 + SPACING_X * (Lang_IsEnglish() ? 17 : 13), infoY, COLOR_GREEN, TR("コード", "code"));
+                        Draw_DrawString(10 + SPACING_X * TR(13, 17), infoY, COLOR_GREEN, TR("コード", "code"));
                 }
                 // ------------------------------------------
 

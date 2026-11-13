@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -35,15 +35,14 @@ typedef struct DownloadCtx
     FILE                    *file;
     uint64_t                done, total, shown;
     const InstallProgress   *progress;
-    const char              *label;
     bool                    writeFailed;
     bool                    cancelled;
 } DownloadCtx;
 
-static void Install_Report(const InstallProgress *progress, const char *label, uint64_t done, uint64_t total)
+static void Install_Report(const InstallProgress *progress, uint64_t done, uint64_t total)
 {
     if (progress != NULL && progress->update != NULL)
-        progress->update(progress->ctx, label, done, total);
+        progress->update(progress->ctx, done, total);
 }
 
 static bool Download_Begin(void *ctx, int64_t length)
@@ -51,7 +50,7 @@ static bool Download_Begin(void *ctx, int64_t length)
     DownloadCtx *d = (DownloadCtx *)ctx;
 
     d->total = length > 0 ? (uint64_t)length : 0;
-    Install_Report(d->progress, d->label, 0, d->total);
+    Install_Report(d->progress, 0, d->total);
     return true;
 }
 
@@ -74,7 +73,7 @@ static bool Download_Write(void *ctx, const void *data, size_t len)
     if (d->done - d->shown >= INSTALL_PROGRESS_STEP || d->done == d->total)
     {
         d->shown = d->done;
-        Install_Report(d->progress, d->label, d->done, d->total);
+        Install_Report(d->progress, d->done, d->total);
     }
     return true;
 }
@@ -90,7 +89,6 @@ InstallResult Install_Download(const ReleaseAsset *asset, const char *path,
     *detail = *detail2 = 0;
     memset(&d, 0, sizeof(d));
     d.progress = progress;
-    d.label = asset->name;
 
     if (!Local_MakeParentDirs(path) || (d.file = fopen(path, "wb")) == NULL)
         return INSTALL_ERR_WRITE;
@@ -116,19 +114,6 @@ InstallResult Install_Download(const ReleaseAsset *asset, const char *path,
         return INSTALL_ERR_FORMAT;
     }
     return INSTALL_OK;
-}
-
-bool Install_HasMagic(const char *path, const char *magic)
-{
-    char head[4];
-    FILE *f = fopen(path, "rb");
-    bool ok;
-
-    if (f == NULL)
-        return false;
-    ok = fread(head, 1, sizeof(head), f) == sizeof(head) && memcmp(head, magic, sizeof(head)) == 0;
-    fclose(f);
-    return ok;
 }
 
 static bool Install_CopyFile(const char *src, const char *dst)
@@ -226,7 +211,7 @@ InstallResult Install_Cia(const char *path, const InstallProgress *progress, int
             if (R_SUCCEEDED(res) && written != n)
                 res = -1;
             offset += n;
-            Install_Report(progress, "Luma3DS_New_Updater.cia", offset, total);
+            Install_Report(progress, offset, total);
         }
 
         if (cia != 0)

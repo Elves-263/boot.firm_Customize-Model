@@ -28,9 +28,13 @@ export UPDATE_REPO ?=
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source source/gdb source/menus source/plugin source/redshift source/bearssl
+# 改変版が新しい方と v9.1 で共通に使うコード（リポジトリ直下の common/。BearSSL は起動時の更新確認の TLS）
+COMMON		:=	../../../common
+SOURCES		:=	source source/gdb source/menus source/plugin source/redshift \
+				$(COMMON)/rosalina/source $(COMMON)/rosalina/source/menus $(COMMON)/bearssl
 DATA		:=	source/gdb/xml data
-INCLUDES	:=	include include/gdb include/menus include/redshift source/bearssl
+INCLUDES	:=	include include/gdb include/menus include/redshift \
+				$(COMMON)/rosalina/include $(COMMON)/bearssl
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -42,9 +46,7 @@ export LUMA_NEW_VERSION ?= $(patsubst v%,%,$(strip $(shell cat "$(CURDIR)/../../
 DEFINES :=	-D__3DS__ -DHBLDR_DEFAULT_3DSX_TID="0x$(HBLDR_DEFAULT_3DSX_TID)ULL" -DHBLDR_DEFAULT_3DSX_TITLE_NAME="\"$(HBLDR_DEFAULT_3DSX_TITLE_NAME)\"" \
 			-DUPDATE_REPO="\"$(UPDATE_REPO)\"" -DLUMA_NEW_VERSION="\"$(LUMA_NEW_VERSION)\""
 
-# TR()（include/menus/lang.h）は日本語と英語を \0 でつないだ 1 つの文字列なので、書式の検査は日本語のほうだけになる。
-# 英語のほうの書式は font_jp/chk_tr.py で日本語のほうと同じか確かめる
-FALSEPOSITIVES := -Wno-array-bounds -Wno-stringop-overflow -Wno-stringop-overread -Wno-format-contains-nul
+FALSEPOSITIVES := -Wno-array-bounds -Wno-stringop-overflow -Wno-stringop-overread
 # --- 追加: -fpermissive の代わりの、的を絞った診断設定 -----------------------
 # GCC 14 以降、以下はすべて既定でエラー(permerror)になった。
 # -fpermissive はこれを全部まとめて警告に格下げしてしまうため使わない。

@@ -454,7 +454,7 @@ void SysConfigMenu_ControlWifi(void)
         if (R_SUCCEEDED(ACI_LoadNetworkSetting(i)))
             ACI_GetNetworkWirelessEssidSecuritySsid(ssids[i]);
         else
-            strcpy(ssids[i], Lang_Str(TR("（未設定）", "(not configured)")));
+            strcpy(ssids[i], TR("（未設定）", "(not configured)"));
     }
     if (R_SUCCEEDED(resInit))
         acExit();
@@ -743,7 +743,7 @@ void SysConfigMenu_AdjustVolume(void)
         else if (balancePct > 0)
             sprintf(balanceStr, "R %d%%", balancePct);
         else
-            strcpy(balanceStr, Lang_Str(TR("中央", "centered")));
+            strcpy(balanceStr, TR("中央", "centered"));
 
         Draw_Lock();
         Draw_DrawString(10, 10, COLOR_TITLE, TR("システム設定", "System configuration menu"));

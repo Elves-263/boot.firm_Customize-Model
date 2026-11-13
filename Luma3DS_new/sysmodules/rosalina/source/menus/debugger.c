@@ -199,7 +199,7 @@ void DebuggerMenu_DebugNextApplicationByForce(void)
         GDB_LockAllContexts(&gdbServer);
 
         if (nextApplicationGdbCtx != NULL)
-            strcpy(buf, Lang_Str(TR("すでに設定してあります。", "Operation already performed.")));
+            strcpy(buf, TR("すでに設定してあります。", "Operation already performed."));
         else
         {
             nextApplicationGdbCtx = GDB_SelectAvailableContext(&gdbServer, GDB_PORT_BASE + 3, GDB_PORT_BASE + 4);

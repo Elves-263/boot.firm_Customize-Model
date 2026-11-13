@@ -1140,7 +1140,7 @@ static void     PluginLoader_HandleCommands(void)
 
 void        PluginLoader__ThreadMain(void)
 {
-    const char *title = "プラグインローダー";
+    const char *title = TR("プラグインローダー", "Plugin Loader");
 
     Result  res = 0;
     MemOp   memRegion = isN3DS ? MEMOP_REGION_BASE : MEMOP_REGION_SYSTEM;

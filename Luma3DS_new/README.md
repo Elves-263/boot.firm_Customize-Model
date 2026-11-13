@@ -179,13 +179,28 @@
   日付の表示を日本の書き方にした（utils.c）。
 - 新しい版を知らせる文の題を言語に合わせた（update_check.c）。
 
+### 2026-11-13 — ELVES
+- 配布版を v1.5 にし（配布ソースの common/rosalina/include/fork.h の FORK_PACKAGE_TAG）、名前を Luma3DS_New から
+  boot.firm_Customize-Model に変えた（画面の言葉、お知らせ、通信の名乗り）。
+  Releases に添付する更新アプリのファイル名（Luma3DS_New_Updater.cia）は、前の版からの更新が探すので変えていない。
+- boot.firm を英語版だけにした。`TR("日本語", "English")` は英語のほうだけを使う（arm9/source/lang.h と、配布ソースの
+  common/rosalina/include/menus/lang.h。日本語の文はソースに残してある）。Rosalina の「言語 / Language」と、
+  /luma/lang.cfg の読み書きはやめた（arm9/source/lang.c は削除）。日本語のファイル名などを読むフォントは、
+  今までどおり boot.firm に付ける。
+- 日本語と英語を並べていた知らせ（Draw_DrawBilingual）は英語だけを出す。プラグインローダーの題も英語にした。
+- Rosalina メニューのタイトルの右の「[v動作中の Luma / 改変版の版]」が、右上の日時の表示と重なっていたのを直した
+  （sysmodules/rosalina/source/menu.c の menuDrawTag）。使える幅を日時の表示の左までにし、収まらないときは
+  1 点ずつ左へ流す（1 秒に 30 点。先頭で 1 秒止める）。端の字は点の単位で切って描く（draw.c の
+  Draw_DrawStringClipped）。セーフモードのときは「SAFE」を後ろに付けて、赤で一緒に流す。
+  流す幅が 6 桁も無いメニューでは出さない。メニュー全体の描き直しは今までどおり 1 秒ごと。
+
 ## 改変したファイル (Modified Files)
 
 本家 Luma3DS（UPSTREAM_VERSION の版）から変更したファイル（2026-11 時点）。
 
 - 追加したファイル
   - UPSTREAM_VERSION
-  - arm9/source/lang.c, lang.h, font_jp_ui.h
+  - arm9/source/lang.h, font_jp_ui.h
   - sysmodules/rosalina/source/menus/ftpd.c, lang.c, text_input.c
   - sysmodules/rosalina/include/menus/ftpd.h, lang.h, text_input.h
   - sysmodules/rosalina/source/font_jp.c, sysmodules/rosalina/include/font_jp.h, font_jp_ui.h

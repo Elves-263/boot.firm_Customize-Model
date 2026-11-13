@@ -30,7 +30,6 @@
 #include "draw.h"
 #include "font.h"
 #include "font_jp.h"
-#include "menus/lang.h"
 #include "memory.h"
 #include "menu.h"
 #include "utils.h"
@@ -120,8 +119,6 @@ u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string)
 {
     u16 rows[FONTJP_ROWS];
 
-    string = Lang_Str(string);
-
     for(u32 i = 0, line_i = 0; string[i] != 0;)
     {
         u32 cols;
@@ -166,13 +163,11 @@ u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...
     return Draw_DrawString(posX, posY, color, buf);
 }
 
-// 日本語と英語の 2 行で知らせる
+// 知らせを出す。画面の言葉は英語だけなので、日本語のほう（kanji）は出さない
 u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *kanji, const char *english)
 {
-    posY = Draw_DrawFormattedString(posX, posY, color, "[%s]", kanji);
-    posY = Draw_DrawFormattedString(posX, posY + SPACING_Y, color, "[%s]", english);
-
-    return posY;
+    (void)kanji;
+    return Draw_DrawFormattedString(posX, posY, color, "[%s]", english);
 }
 
 void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color)
@@ -186,8 +181,6 @@ void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color)
 u32 Draw_TextColumns(const char *s)
 {
     u32 total = 0;
-
-    s = Lang_Str(s);
 
     while(*s != 0)
     {
@@ -207,7 +200,6 @@ u32 Draw_ClipText(char *dst, u32 dstSize, const char *src, u32 cols)
     if(dstSize == 0)
         return 0;
 
-    src = Lang_Str(src);
     while(*src != 0)
     {
         u32 w;
@@ -256,7 +248,6 @@ void Draw_CutText(char *s, u32 cols)
 
 const char *Draw_TextTail(const char *s, u32 cols)
 {
-    s = Lang_Str(s);
     u32 total = Draw_TextColumns(s);
 
     while(total > cols)

@@ -200,12 +200,22 @@
   font_jp_ui.h）。言語は /luma/lang.cfg に従い、無ければ日本語。エラーの画面は英語のまま。
 - 更新アプリのダウンロードで SHA-256 を確かめるのをやめた（2026-10-24 (3) の記述を参照。大きさを確かめる）。
 
+### 2026-11-13 — ELVES
+- 配布版を v1.5 にし（配布ソースの common/rosalina/include/fork.h の FORK_PACKAGE_TAG）、名前を Luma3DS_New から
+  boot.firm_Customize-Model に変えた（画面の言葉、お知らせ、通信の名乗り）。
+  Releases に添付する更新アプリのファイル名（Luma3DS_New_Updater.cia）は、前の版からの更新が探すので変えていない。
+- boot.firm を英語版だけにした。`TR("日本語", "English")` は英語のほうだけを使う（source/lang.h と、配布ソースの
+  common/rosalina/include/menus/lang.h。日本語の文はソースに残してある）。Rosalina の「言語 / Language」と、
+  /luma/lang.cfg の読み書きはやめた（source/lang.c は削除）。日本語のファイル名などを読むフォントは、
+  今までどおり boot.firm に付ける。
+- 日本語と英語を並べていた知らせ（Draw_DrawBilingual）は英語だけを出す。プラグインローダーの題も英語にした。
+
 ## 改変したファイル (Modified Files)
 
 本配布物のベース（Luma3DS 3GX フォーク）から ELVES が変更したファイル（2026-11 時点）。
 
 - 追加したファイル
-  - source/lang.c, source/lang.h, source/font_jp_ui.h
+  - source/lang.h, source/font_jp_ui.h
   - sysmodules/rosalina/source/menus/ftpd.c, lang.c, text_input.c
   - sysmodules/rosalina/include/menus/ftpd.h, lang.h, text_input.h
   - sysmodules/rosalina/source/font_jp.c, sysmodules/rosalina/include/font_jp.h, font_jp_ui.h

@@ -38,7 +38,6 @@
 #include "memory.h"
 #include "screen.h"
 #include "fatfs/sdmmc/sdmmc.h"
-#include "lang.h"
 
 extern CfgData configData;
 extern ConfigurationStatus needConfig;
@@ -143,9 +142,6 @@ void main(int argc, char **argv, u32 magicWord)
     }
 
     //Attempt to read the configuration file
-    // 設定画面・PIN の画面の言語（/luma/lang.cfg）
-    initLanguage();
-
     needConfig = readConfig() ? MODIFY_CONFIGURATION : CREATE_CONFIGURATION;
 
     //Determine if this is a firmlaunch boot

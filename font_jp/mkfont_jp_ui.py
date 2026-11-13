@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # 画面で使う字の字形を font_jp.bin から抜き出し、C の表にして書く。boot.firm に埋め込まれるので、
 # フォントが無くても画面は漢字・かなで出る。
-#   Rosalina:            両方の版の sysmodules/rosalina/include/font_jp_ui.h
+#   Rosalina:            common/rosalina/include/font_jp_ui.h（両方の版で共通）
 #   起動時の設定画面など: Luma3DS_new/arm9/source/font_jp_ui.h と Luma3DS_v9_1/source/font_jp_ui.h
 #
 #   python3 mkfont_jp_ui.py
@@ -19,8 +19,8 @@ ROOT = os.path.dirname(HERE)
 FONT = os.path.join(HERE, 'font_jp.bin')
 # (字を探すソースのフォルダ, 書き出すファイル)。同じ組のフォルダの字はまとめて 1 つの表にする
 TARGETS = [
-    (['Luma3DS_new/sysmodules/rosalina/source', 'Luma3DS_v9_1/sysmodules/rosalina/source'],
-     ['Luma3DS_new/sysmodules/rosalina/include/font_jp_ui.h', 'Luma3DS_v9_1/sysmodules/rosalina/include/font_jp_ui.h']),
+    (['Luma3DS_new/sysmodules/rosalina/source', 'Luma3DS_v9_1/sysmodules/rosalina/source', 'common/rosalina/source'],
+     ['common/rosalina/include/font_jp_ui.h']),
     (['Luma3DS_new/arm9/source', 'Luma3DS_v9_1/source'],
      ['Luma3DS_new/arm9/source/font_jp_ui.h', 'Luma3DS_v9_1/source/font_jp_ui.h']),
 ]

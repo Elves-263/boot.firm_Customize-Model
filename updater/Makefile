@@ -1,4 +1,4 @@
-# Luma3DS_New の更新アプリ（.cia）
+# boot.firm_Customize-Model の更新アプリ（.cia）
 #
 #   make CTRULIB=<libctru> APP_VERSION=v1.5 UPDATE_REPO=所有者/名前 LUMA_NEW_VERSION=13.5 \
 #        FIRM_NEW=<新しい方の boot.firm> FIRM_91=<v9.1 の boot.firm>
@@ -26,6 +26,8 @@ include $(DEVKITARM)/3ds_rules
 TARGET      := Luma3DS_New_Updater
 BUILD       := build
 SOURCES     := source source/bearssl source/qrcodegen
+# BearSSL のうち Rosalina と共通の分とヘッダー（更新アプリだけが使う分は source/bearssl）
+COMMON_BEARSSL := ../common/bearssl
 FONT        := data/ui_font.bin
 
 APP_VERSION ?= v0
@@ -36,12 +38,14 @@ LUMA_NEW_VERSION ?= $(patsubst v%,%,$(strip $(shell cat "$(CURDIR)/../Luma3DS_ne
 ARCH        := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CFLAGS      := -g -std=gnu11 -Wall -Wextra -O2 -mword-relocations -ffunction-sections -fdata-sections $(ARCH) \
                -D__3DS__ -DAPP_VERSION="\"$(APP_VERSION)\"" -DUPDATE_REPO="\"$(UPDATE_REPO)\"" -DLUMA_NEW_VERSION="\"$(LUMA_NEW_VERSION)\"" \
-               -I$(CTRULIB)/include $(foreach dir,$(SOURCES),-I$(dir)) -I$(BUILD)
+               -I$(CTRULIB)/include $(foreach dir,$(SOURCES),-I$(dir)) -I$(COMMON_BEARSSL) -I$(BUILD)
 LDFLAGS     := -specs=3dsx.specs -g $(ARCH) -Wl,--gc-sections -Wl,-Map,$(BUILD)/$(TARGET).map
 LIBS        := -L$(CTRULIB)/lib -lctru -lm
 
 CFILES      := $(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))
-OFILES      := $(patsubst %.c,$(BUILD)/%.o,$(CFILES)) $(BUILD)/ui_font.bin.o
+OFILES      := $(patsubst %.c,$(BUILD)/%.o,$(CFILES)) \
+               $(patsubst $(COMMON_BEARSSL)/%.c,$(BUILD)/common/bearssl/%.o,$(wildcard $(COMMON_BEARSSL)/*.c)) \
+               $(BUILD)/ui_font.bin.o
 
 BANNERTOOL  := $(shell command -v bannertool 2>/dev/null)
 ifneq ($(BANNERTOOL),)
@@ -62,6 +66,11 @@ $(BUILD)/ui_font.bin.o $(BUILD)/ui_font_bin.h: $(FONT)
 $(BUILD)/source/screen.o: $(BUILD)/ui_font_bin.h
 
 $(BUILD)/%.o: %.c
+	@mkdir -p $(@D)
+	@echo $(notdir $<)
+	@$(CC) -MMD -MP $(CFLAGS) -c $< -o $@
+
+$(BUILD)/common/bearssl/%.o: $(COMMON_BEARSSL)/%.c
 	@mkdir -p $(@D)
 	@echo $(notdir $<)
 	@$(CC) -MMD -MP $(CFLAGS) -c $< -o $@

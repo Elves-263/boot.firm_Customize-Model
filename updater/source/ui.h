@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 #pragma once
 
-// 画面の見た目。Rosalina と同じく黒い地に文字だけを並べ、選んでいる行に > を付ける。
+// 画面の見た目。Rosalina と同じく地の色に文字だけを並べ、選んでいる行に > を付ける。色は黒×金と白×金の 2 つ。
 // UiState の中身どおりに両方の画面を描き、タッチされたものを返す。
 // 3DS の機能は使わないので、PC でも見本を作れる（tools/preview.c）
 
@@ -93,6 +93,7 @@ typedef struct UiVersion
 typedef struct UiState
 {
     UiView      view;
+    bool        light;      // 画面の色（false: 黒×金、true: 白×金）
     uint32_t    frame;      // 大きさの分からない進み具合の帯を動かす
     const char  *appVersion;
 
@@ -146,5 +147,5 @@ int Ui_VersionRows(void);
 // 下の画面のタッチ。当たらなければ -1
 int Ui_HitItem(const UiState *ui, int x, int y);
 int Ui_HitVersion(const UiState *ui, int x, int y);
-// 下の端の「A: …」（1）・「B: …」（0）。当たらなければ -1。重ねるものがあればその A・B
+// 下の端の「A: …」（1）・「B: …」（0）・「X: …」か「Y: …」（2）。当たらなければ -1。重ねるものがあればその A・B
 int Ui_HitButtons(const UiState *ui, int x, int y);

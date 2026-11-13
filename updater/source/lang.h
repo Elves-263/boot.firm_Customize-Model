@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -18,14 +18,5 @@
 
 #pragma once
 
-// 画面の言葉の言語。Rosalina の「言語 / Language」と同じ /luma/lang.cfg（0: 英語、1: 日本語）を読み、
-// 無ければ本体の言語が日本語なら日本語、それ以外は英語にして lang.cfg に書く。アプリを起動している間は変えない
-
-#include <stdbool.h>
-
-extern bool g_langEn;
-
-// 日本語の文と英語の文のどちらかを選ぶ
-#define TR(ja, en) (g_langEn ? (en) : (ja))
-
-void Lang_Init(void);
+// 画面の言葉は日本語だけ（v1.5 から）。英語の文は、戻すときのためにソースに残してある
+#define TR(ja, en) ja

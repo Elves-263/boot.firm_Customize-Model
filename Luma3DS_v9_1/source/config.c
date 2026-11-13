@@ -81,9 +81,8 @@ void writeConfig(bool isConfigOptions)
 
 void configMenu(bool oldPinStatus, u32 oldPinMode)
 {
-    // 言語は起動のたびに決まるので、表は static にしない（TR() は実行するときに選ぶ）
     // ( ) の中に x を描く。日本語の文でも ( ) は半角で書く
-    const char *multiOptionsText[]  = { TR("標準の EmuNAND: 1( ) 2( ) 3( ) 4( )", "Default EmuNAND: 1( ) 2( ) 3( ) 4( )"),
+    static const char *multiOptionsText[]  = { TR("標準の EmuNAND: 1( ) 2( ) 3( ) 4( )", "Default EmuNAND: 1( ) 2( ) 3( ) 4( )"),
                                         TR("画面の明るさ: 4( ) 3( ) 2( ) 1( )", "Screen brightness: 4( ) 3( ) 2( ) 1( )"),
                                         TR("スプラッシュ: なし( ) ペイロードの前( ) 後( )", "Splash: Off( ) Before( ) After( ) payloads"),
                                         TR("スプラッシュの時間: 1( ) 3( ) 5( ) 7( ) 秒", "Splash duration: 1( ) 3( ) 5( ) 7( ) seconds"),
@@ -91,7 +90,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                         TR("New 3DS の CPU: 通常( ) クロック( ) L2( ) 両方( )", "New 3DS CPU: Off( ) Clock( ) L2( ) Clock+L2( )"),
                                       };
 
-    const char *singleOptionsText[] = { TR("( ) EmuNAND で起動する", "( ) Autoboot EmuNAND"),
+    static const char *singleOptionsText[] = { TR("( ) EmuNAND で起動する", "( ) Autoboot EmuNAND"),
                                         TR("( ) R で起動したら EmuNAND の FIRM を使う", "( ) Use EmuNAND FIRM if booting with R"),
                                         TR("( ) 外部の FIRM とモジュールを読み込む", "( ) Enable loading external FIRMs and modules"),
                                         TR("( ) ゲームのパッチを使う", "( ) Enable game patching"),
@@ -102,7 +101,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                       };
 
     // 下の画面は 1 行に全角 25 字まで
-    const char *optionsDescription[]  = { TR("標準の EmuNAND を選びます。\n\n"
+    static const char *optionsDescription[]  = { TR("標準の EmuNAND を選びます。\n\n"
                                              "十字キーを押さずに起動したときに\n"
                                              "使います。",
                                              "Select the default EmuNAND.\n\n"

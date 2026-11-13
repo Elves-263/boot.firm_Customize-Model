@@ -82,7 +82,7 @@ find "$REPO" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 # 改変版のビルドで出来たものは載せない
 (cd "$REPO" && make -s clean >/dev/null 2>&1 || true)
 git_q add -A
-git_q commit --quiet -m "Luma3DS_New fork on $BASE"
+git_q commit --quiet -m "boot.firm_Customize-Model fork on $BASE"
 
 # 新しい版の上に載せ直す
 git_q checkout --quiet -b upgrade "$TARGET"

@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@
 #define HTTPS_HOST_SIZE     128
 #define HTTPS_PATH_SIZE     1024
 #define HTTPS_LINE_SIZE     1024    // これより長いヘッダーの行は読み捨てる（Location はこれに収まる）
-#define HTTPS_USER_AGENT    "Luma3DS_New-Updater/" APP_VERSION
+#define HTTPS_USER_AGENT    "boot.firm_Customize-Model-Updater/" APP_VERSION
 
 #ifndef APP_VERSION
 #define APP_VERSION "test"

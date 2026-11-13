@@ -33,15 +33,11 @@
 // 画面に出す版。LUMA_NEW_VERSION は Makefile が Luma3DS_new/UPSTREAM_VERSION から渡す（v13.5 なら "13.5"）
 #define FORK_LUMA_VERSION  "9.1"
 #define FORK_OTHER_VERSION LUMA_NEW_VERSION
-#define FORK_PACKAGE_TAG   "v1.4"
 #define FORK_TITLE_TAG       "[v" FORK_LUMA_VERSION " / " FORK_PACKAGE_TAG "]"
 #define FORK_TITLE_TAG_SHORT "[v" FORK_LUMA_VERSION "]"
 
-void LogLine(const char *msg);
-void SDSpaceWarnIfLow(void);
-void ChainloadCheckFailed(void);
-void ChainloadWarnIfFailed(void);
-extern bool g_safeMode;
+// FORK_PACKAGE_TAG と、両方の版で共通の関数（common/rosalina）
+#include "fork.h"
 #define MENU_WORK_BUF_SIZE 0x8000
 extern u8 g_menuWorkBuf[MENU_WORK_BUF_SIZE];
 

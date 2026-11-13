@@ -30,7 +30,6 @@
 #include "draw.h"
 #include "font.h"
 #include "font_jp.h"
-#include "menus/lang.h"
 #include "memory.h"
 #include "menu.h"
 #include "utils.h"
@@ -117,8 +116,6 @@ u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string)
 {
     u16 rows[FONTJP_ROWS];
 
-    string = Lang_Str(string);
-
     for(u32 i = 0, line_i = 0; string[i] != 0;)
     {
         u32 cols;
@@ -160,6 +157,34 @@ u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string)
     return posY;
 }
 
+void Draw_DrawStringClipped(s32 posX, u32 posY, u32 color, const char *string, s32 minX, s32 maxX)
+{
+    u16 *const fb = (u16 *)FB_BOTTOM_VRAM_ADDR;
+    u16 rows[FONTJP_ROWS];
+    u32 cols;
+
+    for(; *string != 0; posX += cols * SPACING_X)
+    {
+        bool glyph;
+        u32 len = Draw_ScanChar(string, rows, &cols, &glyph);
+        u8 c = len > 1 && !glyph ? '?' : *string;
+
+        string += len;
+        for(u32 y = 0; y < FONTJP_ROWS; y++)
+        {
+            // 英数字の字（左端の点が bit 6）を、日本語の字形（左端の点が bit 11）にそろえる
+            u32 bits = glyph ? rows[y] : (u32)font[c * 10 + y] << 5;
+
+            for(s32 x = 0; x < (s32)(cols * SPACING_X); x++)
+            {
+                s32 screenX = posX + x - 1;
+                if(screenX >= minX && screenX < maxX)
+                    fb[screenX * SCREEN_BOT_HEIGHT + (SCREEN_BOT_HEIGHT - 1 - posY - y)] = ((bits >> (11 - x)) & 1) ? color : COLOR_BLACK;
+            }
+        }
+    }
+}
+
 u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...)
 {
     char buf[DRAW_MAX_FORMATTED_STRING_SIZE + 1];
@@ -171,13 +196,11 @@ u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...
     return Draw_DrawString(posX, posY, color, buf);
 }
 
-// 日本語と英語の 2 行で知らせる
+// 知らせを出す。画面の言葉は英語だけなので、日本語のほう（kanji）は出さない
 u32 Draw_DrawBilingual(u32 posX, u32 posY, u32 color, const char *kanji, const char *english)
 {
-    posY = Draw_DrawFormattedString(posX, posY, color, "[%s]", kanji);
-    posY = Draw_DrawFormattedString(posX, posY + SPACING_Y, color, "[%s]", english);
-
-    return posY;
+    (void)kanji;
+    return Draw_DrawFormattedString(posX, posY, color, "[%s]", english);
 }
 
 void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color)
@@ -191,8 +214,6 @@ void Draw_DrawScrollMarks(u32 posY, u32 rows, u32 first, u32 total, u32 color)
 u32 Draw_TextColumns(const char *s)
 {
     u32 total = 0;
-
-    s = Lang_Str(s);
 
     while(*s != 0)
     {
@@ -212,7 +233,6 @@ u32 Draw_ClipText(char *dst, u32 dstSize, const char *src, u32 cols)
     if(dstSize == 0)
         return 0;
 
-    src = Lang_Str(src);
     while(*src != 0)
     {
         u32 w;
@@ -261,7 +281,6 @@ void Draw_CutText(char *s, u32 cols)
 
 const char *Draw_TextTail(const char *s, u32 cols)
 {
-    s = Lang_Str(s);
     u32 total = Draw_TextColumns(s);
 
     while(total > cols)

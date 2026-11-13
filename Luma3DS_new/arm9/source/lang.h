@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -18,15 +18,5 @@
 
 #pragma once
 
-// 起動時の設定画面などの言葉の言語。Rosalina の「言語 / Language」と同じ /luma/lang.cfg
-// （0: 英語、1: 日本語）を読む。この画面は本体の設定を読む前に出るので、lang.cfg が無いときは日本語にする
-// （Rosalina と更新アプリが、初めて本体の言語を読んだときに lang.cfg を作る）。エラーの画面は英語のまま
-
-#include "types.h"
-
-extern bool langEnglish;
-
-// 日本語の文と英語の文のどちらかを選ぶ
-#define TR(ja, en) (langEnglish ? (en) : (ja))
-
-void initLanguage(void);
+// 起動時の設定画面などの言葉は英語だけ（v1.5 から）。日本語の文は、戻すときのためにソースに残してある
+#define TR(ja, en) en

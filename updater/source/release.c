@@ -1,5 +1,5 @@
 /*
-*   This file is part of a modified version of Luma3DS (Luma3DS_New updater)
+*   This file is part of a modified version of Luma3DS (boot.firm_Customize-Model updater)
 *   Copyright (C) 2026 ELVES
 *
 *   This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "release.h"
 #include "json.h"
@@ -40,9 +39,7 @@ static void Release_Copy(char *dst, size_t size, const char *src)
 static bool Release_Read(Release *r, const JsonValue *v)
 {
     const char *tag = Json_String(Json_Get(v, "tag_name"), "");
-    const char *title = Json_String(Json_Get(v, "name"), NULL);
     const char *date = Json_String(Json_Get(v, "published_at"), "");
-    const char *notes = Json_String(Json_Get(v, "body"), "");
     const JsonValue *assets = Json_Get(v, "assets");
 
     memset(r, 0, sizeof(*r));
@@ -50,14 +47,8 @@ static bool Release_Read(Release *r, const JsonValue *v)
         return false;
 
     strcpy(r->tag, tag);
-    Release_Copy(r->title, sizeof(r->title), title != NULL && title[0] != 0 ? title : tag);
-    Release_Copy(r->date, sizeof(r->date), date);
     Release_Copy(r->published, sizeof(r->published), date);
     r->prerelease = Json_Bool(Json_Get(v, "prerelease"), false);
-
-    r->notes = strdup(notes);
-    if (r->notes == NULL)
-        return false;
 
     if (assets != NULL && assets->type == JSON_ARRAY)
     {
@@ -104,23 +95,20 @@ HttpsResult Release_FetchList(ReleaseList *list, const char *repo, int *detail)
         return res;
     }
 
-    if (!Json_Parse(&doc, buf.data, buf.size) || doc.root->type != JSON_ARRAY)
+    bool parsed = Json_Parse(&doc, buf.data, buf.size);
+    Https_BufferFree(&buf);
+    if (!parsed)
+        return HTTPS_ERR_PROTOCOL;
+    if (doc.root->type != JSON_ARRAY)
     {
-        Https_BufferFree(&buf);
+        Json_Free(&doc);
         return HTTPS_ERR_PROTOCOL;
     }
-    Https_BufferFree(&buf);
 
     for (const JsonValue *v = doc.root->u.child; v != NULL && list->count < RELEASE_MAX; v = v->next)
     {
-        Release *r = &list->items[list->count];
-        if (!Release_Read(r, v))
-        {
-            free(r->notes);
-            r->notes = NULL;
-            continue;
-        }
-        ++list->count;
+        if (Release_Read(&list->items[list->count], v))
+            ++list->count;
     }
     Json_Free(&doc);
 
@@ -143,10 +131,8 @@ HttpsResult Release_FetchList(ReleaseList *list, const char *repo, int *detail)
     return HTTPS_OK;
 }
 
-void Release_FreeList(ReleaseList *list)
+void Release_ClearList(ReleaseList *list)
 {
-    for (int i = 0; i < list->count; ++i)
-        free(list->items[i].notes);
     memset(list, 0, sizeof(*list));
     list->latest = -1;
 }

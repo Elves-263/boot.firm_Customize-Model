@@ -854,9 +854,8 @@ void writeConfig(bool isConfigOptions)
 
 void configMenu(bool oldPinStatus, u32 oldPinMode)
 {
-    // 言語は起動のたびに決まるので、表は static にしない（TR() は実行するときに選ぶ）
     // ( ) の中に x を描く。日本語の文でも ( ) は半角で書く
-    const char *multiOptionsText[]  = { TR("標準の EmuNAND: 1( ) 2( ) 3( ) 4( )", "Default EmuNAND: 1( ) 2( ) 3( ) 4( )"),
+    static const char *multiOptionsText[]  = { TR("標準の EmuNAND: 1( ) 2( ) 3( ) 4( )", "Default EmuNAND: 1( ) 2( ) 3( ) 4( )"),
                                         TR("画面の明るさ: 4( ) 3( ) 2( ) 1( )", "Screen brightness: 4( ) 3( ) 2( ) 1( )"),
                                         TR("スプラッシュ: なし( ) ペイロードの前( ) 後( )", "Splash: Off( ) Before( ) After( ) payloads"),
                                         TR("PIN ロック: なし( ) 4( ) 6( ) 8( ) 桁", "PIN lock: Off( ) 4( ) 6( ) 8( ) digits"),
@@ -864,7 +863,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                         TR("hbmenu の自動起動: なし( ) 3DS( ) DSi( )", "Hbmenu autoboot: Off( ) 3DS( ) DSi( )"),
                                       };
 
-    const char *singleOptionsText[] = { TR("( ) EmuNAND で起動する", "( ) Autoboot EmuNAND"),
+    static const char *singleOptionsText[] = { TR("( ) EmuNAND で起動する", "( ) Autoboot EmuNAND"),
                                         TR("( ) 外部の FIRM とモジュールを読み込む", "( ) Enable loading external FIRMs and modules"),
                                         TR("( ) ゲームのパッチを使う", "( ) Enable game patching"),
                                         TR("( ) アプリの syscore スレッドを core2 で動かす", "( ) Redirect app. syscore threads to core2"),
@@ -877,7 +876,7 @@ void configMenu(bool oldPinStatus, u32 oldPinMode)
                                       };
 
     // 下の画面は 1 行に全角 25 字まで
-    const char *optionsDescription[]  = { TR("標準の EmuNAND を選びます。\n\n"
+    static const char *optionsDescription[]  = { TR("標準の EmuNAND を選びます。\n\n"
                                              "十字キーを押さずに起動したときに\n"
                                              "使います（上・右・下・左を押すと\n"
                                              "EmuNAND 1・2・3・4）。",
